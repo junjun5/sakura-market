@@ -105,6 +105,7 @@ src/favorites.js           business rules for saved listings (favorites)
 src/store.js               in-memory data and seed
 src/errors.js              AppError and helpers
 public/                    browser client (plain HTML/CSS/JS)
+public/controller.js       client page state and ordering of loads and favorite toggles
 public/favorites-state.js  pure helpers for the client's Favorites state
 test/                      node:test suites
 docs/prd/                  product requirement documents

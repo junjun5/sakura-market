@@ -1,40 +1,19 @@
 // Browser client. Plain DOM, no framework, no build step.
-import {
-  applyFavoriteResult,
-  canFavorite,
-  createLatestGate,
-  listingsPath,
-  optimisticFavorite,
-} from './favorites-state.js';
+import { createApiClient, createController } from './controller.js';
+import { canFavorite } from './favorites-state.js';
 
 const $ = (selector) => document.querySelector(selector);
 
-const state = {
-  users: [],
+const api = createApiClient((...args) => fetch(...args));
+
+const controller = createController({
+  api,
   userId: localStorage.getItem('userId') ?? 'u1',
-  view: 'all',
-  // Listings shown in the current view for the current user; null while loading.
-  listings: null,
-  loadFailed: false,
-  // `${userId}:${listingId}` -> optimistic { savedByMe, savedCount } of an in-flight toggle.
-  pending: new Map(),
-};
-
-const loads = createLatestGate();
-
-async function api(path, { method = 'GET', body, userId = state.userId } = {}) {
-  const res = await fetch(path, {
-    method,
-    headers: {
-      'x-user-id': userId,
-      ...(body ? { 'content-type': 'application/json' } : {}),
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error?.message ?? 'Request failed.');
-  return data;
-}
+  filters: () => ({ q: $('#search').value, onSale: $('#only-on-sale').checked }),
+  render,
+  showMessage,
+});
+const { state } = controller;
 
 function showMessage(text, kind = 'info') {
   const el = $('#message');
@@ -47,10 +26,8 @@ function userName(id) {
   return state.users.find((u) => u.id === id)?.name ?? id;
 }
 
-const pendingKey = (userId, listingId) => `${userId}:${listingId}`;
-
 function favoriteControls(listing) {
-  const pending = state.pending.get(pendingKey(state.userId, listing.id));
+  const pending = controller.pendingFor(listing.id);
   const { savedByMe, savedCount } = pending ?? listing;
 
   const wrap = document.createElement('div');
@@ -66,7 +43,7 @@ function favoriteControls(listing) {
     heart.title = savedByMe ? 'Remove from saved' : 'Save';
     heart.textContent = savedByMe ? '♥' : '♡';
     heart.disabled = Boolean(pending);
-    heart.addEventListener('click', () => toggleFavorite(listing.id));
+    heart.addEventListener('click', () => controller.toggleFavorite(listing.id));
     wrap.append(heart);
   }
 
@@ -130,7 +107,7 @@ function savedEmptyState() {
   const back = document.createElement('button');
   back.type = 'button';
   back.textContent = 'Browse all listings';
-  back.addEventListener('click', () => setView('all'));
+  back.addEventListener('click', () => controller.setView('all'));
   wrap.append(text, back);
   return wrap;
 }
@@ -147,7 +124,20 @@ function renderNav() {
   $('#listings').setAttribute('aria-label', saved ? 'Saved listings' : 'Listings');
 }
 
-function render() {
+// Cards are rebuilt on every render, so a focused heart would otherwise drop
+// focus to the page. A settled toggle also reclaims focus its disabled
+// in-flight heart lost, unless the user has since focused something else.
+function focusTarget({ settledListingId } = {}) {
+  const active = document.activeElement;
+  const card = active?.dataset?.control ? active.closest('#listings [data-listing-id]') : null;
+  if (card) return { listingId: card.dataset.listingId, control: active.dataset.control };
+  const focusLost = !active || active === document.body;
+  if (focusLost && settledListingId) return { listingId: settledListingId, control: 'heart' };
+  return null;
+}
+
+function render(options) {
+  const target = focusTarget(options);
   renderNav();
   const container = $('#listings');
   if (state.listings === null) {
@@ -157,73 +147,11 @@ function render() {
   } else {
     container.replaceChildren(...state.listings.map(listingCard));
   }
-}
-
-async function loadView() {
-  const ticket = loads.next();
-  const path = listingsPath(state.view, { q: $('#search').value, onSale: $('#only-on-sale').checked });
-  try {
-    const { listings } = await api(path);
-    if (!loads.isCurrent(ticket)) return;
-    state.listings = listings;
-    state.loadFailed = false;
-  } catch (err) {
-    if (!loads.isCurrent(ticket)) return;
-    state.loadFailed = true;
-    showMessage(err.message, 'error');
+  if (target) {
+    container
+      .querySelector(`[data-listing-id="${CSS.escape(target.listingId)}"] [data-control="${target.control}"]`)
+      ?.focus();
   }
-  render();
-}
-
-// Clears the shown cards first so the previous user's or view's listings can
-// neither be seen nor pressed while the new ones load.
-function reloadFresh() {
-  state.listings = null;
-  state.loadFailed = false;
-  render();
-  return loadView();
-}
-
-function setView(view) {
-  state.view = view;
-  showMessage('');
-  reloadFresh();
-}
-
-async function toggleFavorite(listingId) {
-  const userId = state.userId;
-  const key = pendingKey(userId, listingId);
-  const listing = state.listings?.find((l) => l.id === listingId);
-  if (!listing || state.pending.has(key) || !canFavorite(listing, userId)) return;
-
-  const prior = { id: listingId, savedByMe: listing.savedByMe, savedCount: listing.savedCount };
-  const next = optimisticFavorite(listing);
-  const loadsBefore = loads.current();
-  state.pending.set(key, next);
-  showMessage('');
-  render();
-
-  let updated = null;
-  let failure = null;
-  try {
-    ({ listing: updated } = await api(`/api/listings/${encodeURIComponent(listingId)}/favorite`, {
-      method: next.savedByMe ? 'PUT' : 'DELETE',
-      userId,
-    }));
-  } catch (err) {
-    failure = err;
-  }
-  state.pending.delete(key);
-  // The result belongs to `userId` only; it must not touch another user's page.
-  if (state.userId !== userId) return;
-
-  state.listings = applyFavoriteResult(state.listings, updated ?? prior, state.view);
-  if (failure) showMessage(failure.message, 'error');
-  const focusLost = !document.activeElement || document.activeElement === document.body;
-  render();
-  if (focusLost) document.querySelector(`[data-listing-id="${CSS.escape(listingId)}"] .heart`)?.focus();
-  // A load that ran during the request may hold pre-mutation data, or the view changed: fetch again.
-  if (loads.current() !== loadsBefore) loadView();
 }
 
 async function buy(id) {
@@ -234,7 +162,7 @@ async function buy(id) {
   } catch (err) {
     if (state.userId === userId) showMessage(err.message, 'error');
   }
-  await loadView();
+  await controller.loadView();
 }
 
 async function sell(event) {
@@ -257,11 +185,11 @@ async function sell(event) {
   } catch (err) {
     if (state.userId === userId) showMessage(err.message, 'error');
   }
-  await loadView();
+  await controller.loadView();
 }
 
 async function init() {
-  const { users } = await api('/api/users');
+  const { users } = await api('/api/users', { userId: state.userId });
   state.users = users;
   if (!users.some((u) => u.id === state.userId)) state.userId = users[0].id;
 
@@ -271,20 +199,18 @@ async function init() {
     select.add(option);
   }
   select.addEventListener('change', () => {
-    state.userId = select.value;
-    localStorage.setItem('userId', state.userId);
-    showMessage('');
-    reloadFresh();
+    localStorage.setItem('userId', select.value);
+    controller.setUser(select.value);
   });
 
   for (const tab of document.querySelectorAll('.view-tab')) {
-    tab.addEventListener('click', () => setView(tab.dataset.view));
+    tab.addEventListener('click', () => controller.setView(tab.dataset.view));
   }
-  $('#search').addEventListener('input', loadView);
-  $('#only-on-sale').addEventListener('change', loadView);
+  $('#search').addEventListener('input', () => controller.loadView());
+  $('#only-on-sale').addEventListener('change', () => controller.loadView());
   $('#sell-form').addEventListener('submit', sell);
 
-  await reloadFresh();
+  await controller.reloadFresh();
 }
 
 init().catch((err) => showMessage(err.message, 'error'));
