@@ -64,6 +64,11 @@ export function createStore({ users = SEED_USERS, listings = SEED_LISTINGS } = {
   const userMap = new Map(users.map((u) => [u.id, { ...u }]));
   const listingMap = new Map(listings.map((l) => [l.id, { ...l }]));
   let nextListingNumber = listingMap.size + 1;
+  // Favorites: userId -> (listingId -> { userId, listingId, savedAt, sequence }).
+  // `sequence` grows with every insert and breaks ties between equal savedAt values.
+  const favoritesByUser = new Map();
+  const saversByListing = new Map();
+  let nextFavoriteSequence = 1;
 
   return {
     getUser: (id) => userMap.get(id) ?? null,
@@ -84,6 +89,33 @@ export function createStore({ users = SEED_USERS, listings = SEED_LISTINGS } = {
       const next = { ...current, ...patch };
       listingMap.set(id, next);
       return next;
+    },
+
+    getFavorite: (userId, listingId) => {
+      const favorite = favoritesByUser.get(userId)?.get(listingId);
+      return favorite ? { ...favorite } : null;
+    },
+    listFavoritesByUser: (userId) =>
+      [...(favoritesByUser.get(userId)?.values() ?? [])].map((f) => ({ ...f })),
+    countFavoritesByUser: (userId) => favoritesByUser.get(userId)?.size ?? 0,
+    countFavoritesForListing: (listingId) => saversByListing.get(listingId)?.size ?? 0,
+
+    // Returns the existing relationship unchanged if the user already saved the listing.
+    insertFavorite({ userId, listingId, savedAt }) {
+      const existing = favoritesByUser.get(userId)?.get(listingId);
+      if (existing) return { ...existing };
+      const favorite = { userId, listingId, savedAt, sequence: nextFavoriteSequence++ };
+      if (!favoritesByUser.has(userId)) favoritesByUser.set(userId, new Map());
+      favoritesByUser.get(userId).set(listingId, favorite);
+      if (!saversByListing.has(listingId)) saversByListing.set(listingId, new Set());
+      saversByListing.get(listingId).add(userId);
+      return { ...favorite };
+    },
+
+    deleteFavorite(userId, listingId) {
+      const removed = favoritesByUser.get(userId)?.delete(listingId) ?? false;
+      if (removed) saversByListing.get(listingId).delete(userId);
+      return removed;
     },
   };
 }
