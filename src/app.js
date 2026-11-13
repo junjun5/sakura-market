@@ -1,10 +1,11 @@
 // HTTP layer: routing, mock auth, JSON in/out, static files.
-// Business rules live in listings.js; data lives in store.js.
+// Business rules live in listings.js and favorites.js; data lives in store.js.
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { AppError, badRequest, notFound, unauthorized } from './errors.js';
+import { createFavoriteService } from './favorites.js';
 import { createListingService } from './listings.js';
 import { createStore } from './store.js';
 
@@ -19,12 +20,18 @@ const MAX_BODY_BYTES = 64 * 1024;
 
 export function createApp({ store = createStore(), now } = {}) {
   const listings = createListingService(store, now ? { now } : undefined);
+  const favorites = createFavoriteService(store, now ? { now } : undefined);
 
   // Mock auth: the caller names itself with the X-User-Id header.
   function requireUser(req) {
-    const user = store.getUser(req.headers['x-user-id']);
+    const user = optionalUser(req);
     if (!user) throw unauthorized();
     return user;
+  }
+
+  // Public routes stay public: a missing or unknown user is just a guest viewer.
+  function optionalUser(req) {
+    return store.getUser(req.headers['x-user-id']);
   }
 
   // Each route: [method, pattern, handler]. `:name` segments become params.
@@ -34,21 +41,32 @@ export function createApp({ store = createStore(), now } = {}) {
     ['GET', '/api/me', ({ req }) => ({ status: 200, body: { user: requireUser(req) } })],
     [
       'GET',
+      '/api/me/favorites',
+      ({ req }) => ({ status: 200, body: { listings: favorites.listSaved(requireUser(req)) } }),
+    ],
+    [
+      'GET',
       '/api/listings',
-      ({ query }) => ({
+      ({ req, query }) => ({
         status: 200,
         body: {
-          listings: listings.list({
-            status: query.get('status') ?? undefined,
-            q: query.get('q') ?? undefined,
-          }),
+          listings: favorites.decorateAll(
+            listings.list({
+              status: query.get('status') ?? undefined,
+              q: query.get('q') ?? undefined,
+            }),
+            optionalUser(req),
+          ),
         },
       }),
     ],
     [
       'GET',
       '/api/listings/:id',
-      ({ params }) => ({ status: 200, body: { listing: listings.get(params.id) } }),
+      ({ req, params }) => ({
+        status: 200,
+        body: { listing: favorites.decorate(listings.get(params.id), optionalUser(req)) },
+      }),
     ],
     [
       'POST',
@@ -56,7 +74,7 @@ export function createApp({ store = createStore(), now } = {}) {
       async ({ req }) => {
         const user = requireUser(req);
         const input = await readJson(req);
-        return { status: 201, body: { listing: listings.create(user, input) } };
+        return { status: 201, body: { listing: favorites.decorate(listings.create(user, input), user) } };
       },
     ],
     [
@@ -64,8 +82,27 @@ export function createApp({ store = createStore(), now } = {}) {
       '/api/listings/:id/purchase',
       ({ req, params }) => {
         const user = requireUser(req);
-        return { status: 200, body: { listing: listings.purchase(user, params.id) } };
+        return {
+          status: 200,
+          body: { listing: favorites.decorate(listings.purchase(user, params.id), user) },
+        };
       },
+    ],
+    [
+      'PUT',
+      '/api/listings/:id/favorite',
+      ({ req, params }) => ({
+        status: 200,
+        body: { listing: favorites.save(requireUser(req), params.id) },
+      }),
+    ],
+    [
+      'DELETE',
+      '/api/listings/:id/favorite',
+      ({ req, params }) => ({
+        status: 200,
+        body: { listing: favorites.remove(requireUser(req), params.id) },
+      }),
     ],
   ];
 
