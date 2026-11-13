@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sakura Market mini</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>Sakura Market <span class="tag">mini</span></h1>
+      <label class="user-switch">
+        Signed in as
+        <select id="user-select" aria-label="Signed in as"></select>
+      </label>
+    </header>
+
+    <main>
+      <section class="toolbar">
+        <input id="search" type="search" placeholder="Search by title" aria-label="Search by title" />
+        <label><input id="only-on-sale" type="checkbox" /> On sale only</label>
+      </section>
+
+      <p id="message" class="message" role="status" hidden></p>
+
+      <section id="listings" class="grid" aria-label="Listings"></section>
+
+      <section class="panel">
+        <h2>Sell an item</h2>
+        <form id="sell-form">
+          <label>Title <input name="title" required maxlength="80" /></label>
+          <label>Description <input name="description" maxlength="1000" /></label>
+          <label>Price (yen) <input name="priceYen" type="number" required min="300" max="9999999" /></label>
+          <button type="submit">List item</button>
+        </form>
+      </section>
+    </main>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
