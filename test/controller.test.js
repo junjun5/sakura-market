@@ -229,6 +229,7 @@ test('page: a failed save rolls back with the server message, and an older refre
     status: 'on_sale',
     buyerId: null,
     createdAt: new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString(),
+    updatedAt: null,
   }));
   await withPage(
     async ({ controller, net, lastMessage, server$, serverState, shown }) => {

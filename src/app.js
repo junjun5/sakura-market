@@ -116,6 +116,18 @@ export function createApp({
       },
     ],
     [
+      'PATCH',
+      '/api/listings/:id',
+      async ({ req, params }) => {
+        const user = requireUser(req);
+        const input = await readJson(req);
+        return {
+          status: 200,
+          body: { listing: favorites.decorate(listings.edit(user, params.id, input), user) },
+        };
+      },
+    ],
+    [
       'POST',
       '/api/listings/:id/purchase',
       ({ req, params }) => {

@@ -40,6 +40,7 @@ function bulkStore(count, { soldEvery = 0 } = {}) {
     status: soldEvery && (i + 1) % soldEvery === 0 ? 'sold' : 'on_sale',
     buyerId: soldEvery && (i + 1) % soldEvery === 0 ? 'u3' : null,
     createdAt: '2026-04-01T09:00:00.000Z',
+    updatedAt: null,
   }));
   return createStore({ listings });
 }

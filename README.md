@@ -111,19 +111,46 @@ response has an `X-Request-ID` header. Errors look like `{ "error": { "code": ".
 "Auth" is a mock: send `X-User-Id: u1` (Hana), `u2` (Ken) or `u3` (Mio).
 Routes marked "yes" answer `401 unauthorized` without a known user.
 
-| Method | Path                                  | Auth | What it does                                                                   |
-| ------ | ------------------------------------- | ---- | ------------------------------------------------------------------------------ |
-| GET    | `/api/health`                         | no   | Liveness check                                                                 |
-| GET    | `/api/metrics`                        | no   | Prometheus metrics (flag `metrics_endpoint`, on by default)                    |
-| GET    | `/api/users`                          | no   | Seed users                                                                     |
-| GET    | `/api/me`                             | yes  | The calling user                                                               |
-| GET    | `/api/listings?status=on_sale&q=text` | no   | List, filter by status, search by title                                        |
-| GET    | `/api/listings/:id`                   | no   | One listing                                                                    |
-| POST   | `/api/listings`                       | yes  | Create a listing (`title`, `description`, `priceYen`)                          |
-| POST   | `/api/listings/:id/purchase`          | yes  | Buy a listing                                                                  |
-| PUT    | `/api/listings/:id/favorite`          | yes  | Save a listing for the caller; returns `{ listing }`                           |
-| DELETE | `/api/listings/:id/favorite`          | yes  | Remove a listing from the caller's saved items; returns `{ listing }`          |
-| GET    | `/api/me/favorites`                   | yes  | The caller's saved listings, most recently saved first; returns `{ listings }` |
+| Method | Path                                  | Auth | What it does                                                                          |
+| ------ | ------------------------------------- | ---- | ------------------------------------------------------------------------------------- |
+| GET    | `/api/health`                         | no   | Liveness check                                                                        |
+| GET    | `/api/metrics`                        | no   | Prometheus metrics (flag `metrics_endpoint`, on by default)                           |
+| GET    | `/api/users`                          | no   | Seed users                                                                            |
+| GET    | `/api/me`                             | yes  | The calling user                                                                      |
+| GET    | `/api/listings?status=on_sale&q=text` | no   | List, filter by status, search by title                                               |
+| GET    | `/api/listings/:id`                   | no   | One listing                                                                           |
+| POST   | `/api/listings`                       | yes  | Create a listing (`title`, `description`, `priceYen`)                                 |
+| PATCH  | `/api/listings/:id`                   | yes  | Change the title, description or price of your on-sale listing; returns `{ listing }` |
+| POST   | `/api/listings/:id/purchase`          | yes  | Buy a listing                                                                         |
+| PUT    | `/api/listings/:id/favorite`          | yes  | Save a listing for the caller; returns `{ listing }`                                  |
+| DELETE | `/api/listings/:id/favorite`          | yes  | Remove a listing from the caller's saved items; returns `{ listing }`                 |
+| GET    | `/api/me/favorites`                   | yes  | The caller's saved listings, most recently saved first; returns `{ listings }`        |
+
+### Editing listings
+
+`PATCH /api/listings/:id` changes a listing you sell. Send any of `title`,
+`description` and `priceYen`; fields you leave out keep their values.
+
+Rules:
+
+- The new values follow the rules for a new listing: `title` is required and at
+  most 80 characters, `description` at most 1000 characters (both are trimmed),
+  and `priceYen` an integer from 300 to 9,999,999. A bad value fails with
+  `400 invalid_title`, `invalid_description` or `invalid_price`, and then nothing
+  changes, not even the fields that were valid.
+- Other fields, such as `status`, `sellerId`, `buyerId`, `createdAt` or
+  `updatedAt`, are ignored. A body with none of the three fields fails with
+  `400 no_changes`.
+- Only the seller can edit: anyone else gets `403 not_seller`. A sold listing
+  fails with `409 already_sold`, and a withdrawn one with `409 listing_withdrawn`.
+- `updatedAt` is `null` until the first edit, then the time of the latest edit
+  (ISO 8601, UTC). `createdAt` never changes, so an edit does not move the
+  listing in `GET /api/listings`, and its saves and saved count stay the same.
+
+```bash
+curl -X PATCH -H 'X-User-Id: u2' -H 'Content-Type: application/json' \
+  -d '{"priceYen":3900}' http://localhost:3000/api/listings/l2
+```
 
 ### Favorites
 

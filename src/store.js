@@ -3,7 +3,7 @@
 
 /**
  * @typedef {{ id: string, name: string }} User
- * @typedef {'on_sale' | 'sold'} ListingStatus
+ * @typedef {'on_sale' | 'sold' | 'withdrawn'} ListingStatus
  * @typedef {{
  *   id: string,
  *   title: string,
@@ -13,6 +13,7 @@
  *   status: ListingStatus,
  *   buyerId: string | null,
  *   createdAt: string,
+ *   updatedAt: string | null,
  * }} Listing
  * @typedef {{ userId: string, listingId: string, savedAt: string, sequence: number }} Favorite
  * @typedef {ReturnType<typeof createStore>} Store
@@ -36,6 +37,7 @@ const SEED_LISTINGS = [
     status: 'on_sale',
     buyerId: null,
     createdAt: '2026-04-01T09:00:00.000Z',
+    updatedAt: null,
   },
   {
     id: 'l2',
@@ -46,6 +48,7 @@ const SEED_LISTINGS = [
     status: 'on_sale',
     buyerId: null,
     createdAt: '2026-04-02T09:00:00.000Z',
+    updatedAt: null,
   },
   {
     id: 'l3',
@@ -56,6 +59,7 @@ const SEED_LISTINGS = [
     status: 'on_sale',
     buyerId: null,
     createdAt: '2026-04-03T09:00:00.000Z',
+    updatedAt: null,
   },
   {
     id: 'l4',
@@ -66,6 +70,7 @@ const SEED_LISTINGS = [
     status: 'sold',
     buyerId: 'u1',
     createdAt: '2026-04-04T09:00:00.000Z',
+    updatedAt: null,
   },
   {
     id: 'l5',
@@ -76,6 +81,7 @@ const SEED_LISTINGS = [
     status: 'on_sale',
     buyerId: null,
     createdAt: '2026-04-05T09:00:00.000Z',
+    updatedAt: null,
   },
 ];
 

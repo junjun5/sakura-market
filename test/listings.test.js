@@ -60,6 +60,7 @@ test('create stores a new on-sale listing owned by the caller', () => {
     status: 'on_sale',
     buyerId: null,
     createdAt: '2026-05-01T00:00:00.000Z',
+    updatedAt: null,
   });
   assert.equal(service.list()[0].id, 'l6');
 });
