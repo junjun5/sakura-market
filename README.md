@@ -59,6 +59,7 @@ Dependabot (`.github/dependabot.yml`) proposes weekly updates for the pinned
 Actions, but only for releases that are at least 7 days old. Server error logs go
 through `src/redact.js`, which masks credentials (including `X-User-Id`) and
 email addresses.
+
 ## Using the web page
 
 - **Signed in as** switches between the seed users Hana, Ken and Mio. Hearts,
@@ -82,25 +83,25 @@ All responses are JSON. Errors look like `{ "error": { "code": "...", "message":
 "Auth" is a mock: send `X-User-Id: u1` (Hana), `u2` (Ken) or `u3` (Mio).
 Routes marked "yes" answer `401 unauthorized` without a known user.
 
-| Method | Path | Auth | What it does |
-| --- | --- | --- | --- |
-| GET | `/api/health` | no | Liveness check |
-| GET | `/api/users` | no | Seed users |
-| GET | `/api/me` | yes | The calling user |
-| GET | `/api/listings?status=on_sale&q=text` | no | List, filter by status, search by title |
-| GET | `/api/listings/:id` | no | One listing |
-| POST | `/api/listings` | yes | Create a listing (`title`, `description`, `priceYen`) |
-| POST | `/api/listings/:id/purchase` | yes | Buy a listing |
-| PUT | `/api/listings/:id/favorite` | yes | Save a listing for the caller; returns `{ listing }` |
-| DELETE | `/api/listings/:id/favorite` | yes | Remove a listing from the caller's saved items; returns `{ listing }` |
-| GET | `/api/me/favorites` | yes | The caller's saved listings, most recently saved first; returns `{ listings }` |
+| Method | Path                                  | Auth | What it does                                                                   |
+| ------ | ------------------------------------- | ---- | ------------------------------------------------------------------------------ |
+| GET    | `/api/health`                         | no   | Liveness check                                                                 |
+| GET    | `/api/users`                          | no   | Seed users                                                                     |
+| GET    | `/api/me`                             | yes  | The calling user                                                               |
+| GET    | `/api/listings?status=on_sale&q=text` | no   | List, filter by status, search by title                                        |
+| GET    | `/api/listings/:id`                   | no   | One listing                                                                    |
+| POST   | `/api/listings`                       | yes  | Create a listing (`title`, `description`, `priceYen`)                          |
+| POST   | `/api/listings/:id/purchase`          | yes  | Buy a listing                                                                  |
+| PUT    | `/api/listings/:id/favorite`          | yes  | Save a listing for the caller; returns `{ listing }`                           |
+| DELETE | `/api/listings/:id/favorite`          | yes  | Remove a listing from the caller's saved items; returns `{ listing }`          |
+| GET    | `/api/me/favorites`                   | yes  | The caller's saved listings, most recently saved first; returns `{ listings }` |
 
 ### Favorites
 
 Every listing in a response carries two extra fields:
 
 - `savedCount`: how many users saved the listing. It is public, so guests see it too.
-  The API never says *who* saved a listing.
+  The API never says _who_ saved a listing.
 - `savedByMe`: whether the user in `X-User-Id` saved it. `false` for guests.
 
 Rules:

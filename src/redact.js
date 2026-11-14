@@ -26,7 +26,10 @@ export function redact(value) {
 }
 
 export function redactText(text) {
-  return SENSITIVE_TEXT_RULES.reduce((out, [pattern, replacement]) => out.replace(pattern, replacement), text);
+  return SENSITIVE_TEXT_RULES.reduce(
+    (out, [pattern, replacement]) => out.replace(pattern, replacement),
+    text,
+  );
 }
 
 function redactValue(value, depth, ancestors) {

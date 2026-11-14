@@ -28,7 +28,7 @@ test('client: All uses the filters, Saved ignores them', () => {
   assert.equal(listingsPath('saved', { q: 'helmet', onSale: true }), '/api/me/favorites');
 });
 
-test('client: hearts only appear on other users\' listings', () => {
+test("client: hearts only appear on other users' listings", () => {
   assert.equal(canFavorite(helmet, 'u1'), true);
   assert.equal(canFavorite(helmet, 'u2'), false);
 });
@@ -40,18 +40,35 @@ test('client: an optimistic toggle flips the heart and moves the count by one', 
 });
 
 test('client: a server result replaces the card in All and keeps unsaved cards', () => {
-  const result = applyFavoriteResult([helmet, keyboard], { ...keyboard, savedCount: 1, savedByMe: false }, 'all');
-  assert.deepEqual(result.map((l) => [l.id, l.savedCount, l.savedByMe]), [
-    ['l2', 0, false],
-    ['l3', 1, false],
-  ]);
+  const result = applyFavoriteResult(
+    [helmet, keyboard],
+    { ...keyboard, savedCount: 1, savedByMe: false },
+    'all',
+  );
+  assert.deepEqual(
+    result.map((l) => [l.id, l.savedCount, l.savedByMe]),
+    [
+      ['l2', 0, false],
+      ['l3', 1, false],
+    ],
+  );
 });
 
 test('client: a removal in Saved drops the card, a save keeps it', () => {
-  const removed = applyFavoriteResult([keyboard, helmet], { ...keyboard, savedByMe: false, savedCount: 1 }, 'saved');
-  assert.deepEqual(removed.map((l) => l.id), ['l2']);
+  const removed = applyFavoriteResult(
+    [keyboard, helmet],
+    { ...keyboard, savedByMe: false, savedCount: 1 },
+    'saved',
+  );
+  assert.deepEqual(
+    removed.map((l) => l.id),
+    ['l2'],
+  );
   const saved = applyFavoriteResult([keyboard], { ...keyboard, savedCount: 3 }, 'saved');
-  assert.deepEqual(saved.map((l) => [l.id, l.savedCount]), [['l3', 3]]);
+  assert.deepEqual(
+    saved.map((l) => [l.id, l.savedCount]),
+    [['l3', 3]],
+  );
 });
 
 test('client: a result for a listing that is not shown changes nothing', () => {

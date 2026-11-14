@@ -11,6 +11,18 @@
     "start": "node src/server.js",
     "dev": "bash scripts/dev.sh",
     "test": "node --test",
-    "check": "bash scripts/check.sh"
+    "check": "bash scripts/check.sh",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "@types/node": "20.19.43",
+    "eslint": "10.14.0",
+    "globals": "17.14.0",
+    "jscpd": "5.4.2",
+    "knip": "6.44.1",
+    "prettier": "3.9.10",
+    "typescript": "7.0.2"
   }
 }

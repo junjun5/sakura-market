@@ -1,0 +1,7 @@
+node_modules/
+coverage/
+reports/
+.dev/
+package-lock.json
+# Product documents are written by hand by the product team.
+docs/prd/

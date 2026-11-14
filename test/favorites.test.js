@@ -285,7 +285,10 @@ test('a saved listing that is later sold stays in place with live sold state', (
   listings.purchase(hana, HELMET);
 
   const saved = favorites.listSaved(mio);
-  assert.deepEqual(saved.map((l) => l.id), ['l1', HELMET, 'l3']);
+  assert.deepEqual(
+    saved.map((l) => l.id),
+    ['l1', HELMET, 'l3'],
+  );
   assert.equal(saved[1].status, 'sold');
   assert.equal(saved[1].buyerId, 'u1');
   assert.equal(saved[1].savedCount, 1);

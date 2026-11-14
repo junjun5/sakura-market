@@ -115,7 +115,10 @@ test('page: a refresh begun before a save cannot revert the settled save', () =>
     staleGet.release();
     await staleLoad;
     assert.deepEqual(shown('l2'), { savedByMe: true, savedCount: 1 });
-    assert.deepEqual(controller.state.listings.map((l) => l.id), ['l2']);
+    assert.deepEqual(
+      controller.state.listings.map((l) => l.id),
+      ['l2'],
+    );
     assert.equal(lastMessage()?.kind ?? 'info', 'info');
 
     await controller.toggleFavorite('l2');
@@ -152,7 +155,10 @@ test('page: a Saved refresh begun before a removal cannot bring the card back', 
   withPage(async ({ controller, net, server$, serverState, shown }) => {
     await server$('PUT', '/api/listings/l2/favorite');
     await controller.setView('saved');
-    assert.deepEqual(controller.state.listings.map((l) => l.id), ['l2']);
+    assert.deepEqual(
+      controller.state.listings.map((l) => l.id),
+      ['l2'],
+    );
 
     const staleGet = net.hold('GET', '/api/me/favorites');
     const staleLoad = controller.loadView();
@@ -207,7 +213,10 @@ test('page: a late error from a refresh begun before a save is ignored', () =>
 
     assert.deepEqual(shown('l2'), { savedByMe: true, savedCount: 1 });
     assert.equal(controller.state.loadFailed, false);
-    assert.equal(messages.some((m) => m.kind === 'error'), false);
+    assert.equal(
+      messages.some((m) => m.kind === 'error'),
+      false,
+    );
   }));
 
 test('page: a failed save rolls back with the server message, and an older refresh stays harmless', async () => {
@@ -247,7 +256,7 @@ test('page: a failed save rolls back with the server message, and an older refre
   );
 });
 
-test('page: a save that settles after a user switch leaves the new user\'s page alone', () =>
+test("page: a save that settles after a user switch leaves the new user's page alone", () =>
   withPage(async ({ controller, net, serverState, shown }) => {
     await controller.reloadFresh();
 
@@ -280,7 +289,10 @@ test('page: a save that settles after switching to Saved shows the Saved list', 
     put.release();
     await toggle;
     assert.equal(controller.state.view, 'saved');
-    assert.deepEqual(controller.state.listings.map((l) => [l.id, l.savedByMe]), [['l2', true]]);
+    assert.deepEqual(
+      controller.state.listings.map((l) => [l.id, l.savedByMe]),
+      [['l2', true]],
+    );
   }));
 
 test('page: toggles on different cards stay independent', () =>

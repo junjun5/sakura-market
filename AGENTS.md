@@ -4,15 +4,15 @@ Guidance for coding agents working in this repository.
 
 ## Commands
 
-| Task | Command |
-| --- | --- |
-| Run all tests | `npm test` |
-| Run one test file | `node --test test/listings.test.js` |
-| Syntax check | `npm run check` |
-| Start the server in the background | `scripts/dev.sh start` (port 3000, or `PORT=4000 scripts/dev.sh start`) |
-| Read server logs | `scripts/dev.sh logs` |
-| Stop the server | `scripts/dev.sh stop` |
-| Install the pre-commit hook (once per clone) | `scripts/install-hooks.sh` |
+| Task                                         | Command                                                                 |
+| -------------------------------------------- | ----------------------------------------------------------------------- |
+| Run all tests                                | `npm test`                                                              |
+| Run one test file                            | `node --test test/listings.test.js`                                     |
+| Syntax check                                 | `npm run check`                                                         |
+| Start the server in the background           | `scripts/dev.sh start` (port 3000, or `PORT=4000 scripts/dev.sh start`) |
+| Read server logs                             | `scripts/dev.sh logs`                                                   |
+| Stop the server                              | `scripts/dev.sh stop`                                                   |
+| Install the pre-commit hook (once per clone) | `scripts/install-hooks.sh`                                              |
 
 Run `npm run check && npm test` before you call a task done.
 
@@ -49,6 +49,7 @@ The pre-commit hook in `.githooks/pre-commit` runs the same gate on the staged f
 - Changes land on `main` through a pull request with the `check-and-test` CI check passing; force-push and branch deletion are blocked. The rule is the ruleset in `.github/rulesets/protect-main.json`; a repository admin applies it with `gh api -X POST repos/junjun5/sakura-market/rulesets --input .github/rulesets/protect-main.json`.
 - Security checks in CI: gitleaks secret scan and an OWASP ZAP baseline scan of the running server (`.github/workflows/security.yml`, rule levels in `.zap/rules.tsv`), plus CodeQL (`.github/workflows/codeql.yml`).
 - Issues and PRs use the templates in `.github/`. Labels are defined in `.github/labels.yml` (`priority: P0`-`P3`, `type: *`, `area: *`) and synced by a workflow. Edit that file instead of creating labels by hand.
+
 ## Boundaries
 
 - Keep data in memory. Do not add a database.
