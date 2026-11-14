@@ -1,0 +1,6 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": ["public/app.js", "scripts/*.js", "test/*.test.js"],
+  "project": ["src/**/*.js", "public/**/*.js", "scripts/**/*.js", "test/**/*.js", "*.js"],
+  "ignoreExportsUsedInFile": true
+}

@@ -5,10 +5,22 @@
 # Install once per clone with `scripts/install-hooks.sh`.
 set -euo pipefail
 
+repo="$(git rev-parse --show-toplevel)"
+if [[ ! -d "$repo/node_modules" ]]; then
+  echo "pre-commit: node_modules is missing. Run npm ci, then commit again." >&2
+  exit 1
+fi
+
 snapshot="$(mktemp -d "${TMPDIR:-/tmp}/sakura-pre-commit.XXXXXX")"
 trap 'rm -rf "$snapshot"' EXIT
 
 git checkout-index --all --prefix="$snapshot/"
+# The dev tools come from the working tree's install; the snapshot only holds
+# the staged files. Git commands in the checks see the snapshot as the work tree.
+ln -s "$repo/node_modules" "$snapshot/node_modules"
+GIT_DIR="$(git rev-parse --absolute-git-dir)"
+export GIT_DIR
+export GIT_WORK_TREE="$snapshot"
 
 echo "pre-commit: running npm run check && npm test on staged files..."
 if ! (cd "$snapshot" && npm run --silent check && npm test --silent); then

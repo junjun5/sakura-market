@@ -2,12 +2,21 @@
 
 A tiny C2C marketplace service: people list items, other people buy them, and
 buyers can save listings to come back to later. It is a demo target for
-agent-driven development, so it is small on purpose and has no dependencies
-beyond Node.js.
+agent-driven development, so it is small on purpose and has no runtime
+dependencies beyond Node.js. The development tools (ESLint, Prettier,
+TypeScript, knip, jscpd) are pinned dev dependencies.
 
 ## Run
 
-Requires Node.js 20 or newer. There is nothing to install.
+Requires Node.js 20 or newer. The server needs nothing installed; for
+development, install the pinned tools and the pre-commit hook once per clone:
+
+```bash
+npm run setup            # npm ci + scripts/install-hooks.sh
+```
+
+The repository also has a dev container (`.devcontainer/devcontainer.json`, Node.js 22)
+that runs `npm run setup` for you.
 
 ```bash
 npm start                # server in the foreground on http://localhost:3000
@@ -23,42 +32,59 @@ Open the server address in a browser to use the web page.
 ### Configuration
 
 Copy `.env.example` to `.env` to change local settings. `.env` is gitignored,
-and variables set in the shell override it. The only setting today is `PORT`
-(default `3000`). Loading `.env` needs Node.js 20.12 or newer.
+and variables set in the shell override it. Loading `.env` needs Node.js 20.12 or newer.
+
+| Variable        | Default | Meaning                                                                |
+| --------------- | ------- | ---------------------------------------------------------------------- |
+| `PORT`          | `3000`  | Port the server listens on                                             |
+| `LOG_LEVEL`     | `info`  | Lowest log level written: `debug`, `info`, `warn`, `error` or `silent` |
+| `FEATURE_FLAGS` | empty   | Flag overrides such as `metrics_endpoint=off` (flags: `src/flags.js`)  |
 
 ## Test
 
 ```bash
-npm run check                      # syntax check for every .js file in src/, public/ and test/
+npm run check                      # format, lint, types, dead code, duplicates, repo rules, docs
 npm test                           # unit + API tests (node:test)
 node --test test/favorites.test.js # one test file
+npm run test:coverage              # tests with the coverage gate (Node.js 22.8+), writes reports/
+npm run test:report                # slowest tests from reports/junit.xml
+npm run test:flaky                 # run the suite 5 times and list flaky tests
 ```
 
-Run `npm run check && npm test` before calling a change done. To have Git run
-that for you, install the pre-commit hook once per clone:
+Run `npm run check && npm test` before calling a change done. The pre-commit
+hook (installed by `npm run setup`, or `scripts/install-hooks.sh`) runs the same
+gate on the staged version of the files, so unstaged edits and untracked files
+do not affect the result.
 
-```bash
-scripts/install-hooks.sh   # sets core.hooksPath to .githooks
-```
-
-The hook checks the staged version of the files, so unstaged edits and
-untracked files do not affect the result. Unit tests use a
-fresh in-memory store; API tests start a real server on a random port. There are
-no browser tests: to check the page, start the server and use it.
+Unit tests use a fresh in-memory store; API tests start a real server on a
+random port. There are no browser tests: to check the page, start the server
+and use it. AGENTS.md lists every command and the conventions the checks enforce.
 
 ## CI and security
 
 Workflows in `.github/workflows/` run on every pull request and on pushes to `main`:
 
-- `ci.yml`: `npm run check` and `npm test` on Node.js 20. The ruleset in `.github/rulesets/protect-main.json` requires its `check-and-test` job, and a pull request, for every change to `main`.
+- `ci.yml`: `npm run check` and the tests with the coverage gate on Node.js 22, with a test timing summary and the `test-reports` artifact (JUnit, lcov), plus `npm test` on Node.js 20. The ruleset in `.github/rulesets/protect-main.json` requires its `check-and-test` job, and a pull request, for every change to `main`.
 - `security.yml`: a gitleaks secret scan of the full history, and an OWASP ZAP baseline scan of the running server. The ZAP report is uploaded as the `zap-baseline` artifact, and its rule levels are in `.zap/rules.tsv`.
 - `codeql.yml`: CodeQL static analysis. Results appear under Security > Code scanning.
 - `sync-labels.yml`: applies `.github/labels.yml` to the repository's labels.
+- `flaky-tests.yml`: weekly, runs the suite 10 times and fails on tests whose outcome changes.
+- `release.yml`: on a `v*` tag, runs the gate and publishes a GitHub Release with generated notes (see `docs/runbooks/releases.md`).
 
 Dependabot (`.github/dependabot.yml`) proposes weekly updates for the pinned
-Actions, but only for releases that are at least 7 days old. Server error logs go
-through `src/redact.js`, which masks credentials (including `X-User-Id`) and
-email addresses.
+dev tools and Actions, but only for releases that are at least 7 days old. Every
+log line goes through `src/redact.js`, which masks credentials (including
+`X-User-Id`) and email addresses.
+
+## Logs, metrics and debugging
+
+- Logs are JSON lines (`scripts/dev.sh logs`). Each request writes one `request`
+  line with its `requestId`, route pattern, status and duration.
+- Every response has an `X-Request-ID` header; send your own to tag a request.
+- `GET /api/metrics` serves request counts, latency histograms, uptime and memory
+  in the Prometheus text format.
+- `npm run profile` records a CPU profile under load in `.dev/profiles/`.
+- Runbooks: `docs/runbooks/`. Request flow: `docs/architecture.md`.
 
 ## Using the web page
 
@@ -79,13 +105,16 @@ email addresses.
 
 ## API
 
-All responses are JSON. Errors look like `{ "error": { "code": "...", "message": "..." } }`.
+The full reference, generated from the OpenAPI schema `docs/api/openapi.json`,
+is `docs/api/README.md`. All responses are JSON except `GET /api/metrics`, and every
+response has an `X-Request-ID` header. Errors look like `{ "error": { "code": "...", "message": "..." } }`.
 "Auth" is a mock: send `X-User-Id: u1` (Hana), `u2` (Ken) or `u3` (Mio).
 Routes marked "yes" answer `401 unauthorized` without a known user.
 
 | Method | Path                                  | Auth | What it does                                                                   |
 | ------ | ------------------------------------- | ---- | ------------------------------------------------------------------------------ |
 | GET    | `/api/health`                         | no   | Liveness check                                                                 |
+| GET    | `/api/metrics`                        | no   | Prometheus metrics (flag `metrics_endpoint`, on by default)                    |
 | GET    | `/api/users`                          | no   | Seed users                                                                     |
 | GET    | `/api/me`                             | yes  | The calling user                                                               |
 | GET    | `/api/listings?status=on_sale&q=text` | no   | List, filter by status, search by title                                        |
@@ -133,11 +162,19 @@ src/favorites.js           business rules for saved listings (favorites)
 src/store.js               in-memory data and seed
 src/errors.js              AppError and helpers
 src/redact.js              masks credentials and personal data before logging
+src/logger.js              JSON-lines logger; every field goes through redact()
+src/metrics.js             request and process metrics in the Prometheus format
+src/flags.js               feature flags and FEATURE_FLAGS parsing
 public/                    browser client (plain HTML/CSS/JS)
 public/controller.js       client page state and ordering of loads and favorite toggles
 public/favorites-state.js  pure helpers for the client's Favorites state
-test/                      node:test suites
-scripts/                   dev server control, syntax check, hook install
+test/                      node:test suites (test/<topic>.test.js); helpers in test/support/
+scripts/                   dev server, quality gate, repo checks, API docs, test reports, profiling
+docs/api/                  OpenAPI schema and the API reference generated from it
+docs/runbooks/             local debugging and release runbooks
+docs/architecture.md       modules and the flow of one request
+.factory/skills/           task skills for coding agents
+.devcontainer/             dev container (Node.js 22, ESLint, Prettier)
 .githooks/pre-commit       runs check and tests on staged files before each commit
 docs/prd/                  product requirement documents
 .github/                   CI and security workflows, Dependabot, CODEOWNERS, templates, labels
