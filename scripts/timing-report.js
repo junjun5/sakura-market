@@ -58,7 +58,7 @@ export function toMarkdown(summary) {
 }
 
 /** @param {string} text */
-const escapeCell = (text) => text.replace(/\|/g, '\\|');
+const escapeCell = (text) => text.replace(/[\\|]/g, '\\$&');
 
 /**
  * @param {string[]} args

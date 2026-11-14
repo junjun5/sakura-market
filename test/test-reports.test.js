@@ -52,11 +52,12 @@ test('the timing summary lists the slowest tests and flags budget overruns', () 
   assert.equal(summarize([]).suiteBudgetMs, DEFAULT_SUITE_BUDGET_MS);
 });
 
-test('the timing report is a Markdown table with pipes in names escaped', () => {
+test('the timing report is a Markdown table with pipes and backslashes in names escaped', () => {
   const markdown = toMarkdown(summarize([{ ...result('a | b', 'passed'), durationMs: 12.34 }]));
   assert.match(markdown, /^## Test timing\n/);
   assert.match(markdown, /1 tests, 0 failed, 0\.01 s of test time/);
   assert.match(markdown, /\| 12\.3 \| a \\\| b \| test\/x\.test\.js \|/);
+  assert.match(toMarkdown(summarize([result('a \\| b', 'passed')])), /\| a \\\\\\\| b \|/);
 });
 
 test('flaky detection separates flaky, always-failing and skipped tests', () => {

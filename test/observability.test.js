@@ -150,7 +150,7 @@ test('an injected metrics registry sees the same requests the app answers', asyn
   const text = metrics.render();
   assert.match(text, /^http_requests_total\{method="GET",route="\/api\/me",status="200"\} 1$/m);
   assert.match(text, /^http_requests_total\{method="GET",route="\/api\/me",status="401"\} 1$/m);
-  assert.doesNotMatch(text, new RegExp(REDACTED.replace(/[[\]]/g, '\\$&')));
+  assert.ok(!text.includes(REDACTED));
 });
 
 test('GET /api/metrics reports requests by route pattern in the Prometheus format', () =>
