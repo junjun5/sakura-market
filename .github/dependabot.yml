@@ -1,13 +1,27 @@
-# Dependency updates. The project has no npm dependencies (see AGENTS.md), so
-# the only third-party code is the GitHub Actions used by the workflows.
+# Dependency updates for the npm dev tools (package.json; there are no runtime
+# dependencies) and the GitHub Actions used by the workflows.
 version: 2
 updates:
-  - package-ecosystem: github-actions
+  - package-ecosystem: npm
     directory: /
     schedule:
       interval: weekly
     # Supply-chain guard: only propose releases that have been public for at
     # least 7 days, so a compromised release has time to be detected and pulled.
+    cooldown:
+      default-days: 7
+    versioning-strategy: increase
+    groups:
+      dev-tools:
+        dependency-type: development
+    labels:
+      - "type: chore"
+      - "area: tooling"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
     cooldown:
       default-days: 7
     groups:
