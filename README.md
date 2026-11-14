@@ -242,6 +242,8 @@ src/flags.js               feature flags and FEATURE_FLAGS parsing
 public/                    browser client (plain HTML/CSS/JS)
 public/controller.js       client page state and ordering of loads and favorite toggles
 public/favorites-state.js  pure helpers for the client's Favorites state
+public/listing-actions.js  pure helpers for a card's buttons and the seller's edit requests
+public/edit-form.js        inline edit form on the seller's own card (DOM only)
 test/                      node:test suites (test/<topic>.test.js); helpers in test/support/
 scripts/                   dev server, quality gate, repo checks, API docs, test reports, profiling
 docs/api/                  OpenAPI schema and the API reference generated from it
