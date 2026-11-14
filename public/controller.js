@@ -8,7 +8,14 @@ import {
   listingsPath,
   optimisticFavorite,
 } from './favorites-state.js';
-import { canManage, draftFrom, editBody, isEditField, replaceListing } from './listing-actions.js';
+import {
+  canManage,
+  draftFrom,
+  editBody,
+  isEditField,
+  replaceListing,
+  withoutListing,
+} from './listing-actions.js';
 
 /**
  * @typedef {import('./favorites-state.js').ClientListing} ClientListing
@@ -69,6 +76,7 @@ export function createController({ api, userId, filters, render, showMessage }) 
    *   loadFailed: boolean,
    *   pending: Map<string, FavoriteState>,
    *   editing: Map<string, EditDraft>,
+   *   withdrawing: Set<string>,
    * }}
    */
   const state = {
@@ -84,6 +92,8 @@ export function createController({ api, userId, filters, render, showMessage }) 
     // listings so it survives every re-render and reload, and per user so no one
     // else sees it.
     editing: new Map(),
+    // `${userId}:${listingId}` of each withdraw still in flight.
+    withdrawing: new Set(),
   };
   const loads = createLatestGate();
 
@@ -91,6 +101,8 @@ export function createController({ api, userId, filters, render, showMessage }) 
   const pendingFor = (listingId) => state.pending.get(pendingKey(state.userId, listingId));
   /** @param {string} listingId */
   const draftFor = (listingId) => state.editing.get(pendingKey(state.userId, listingId));
+  /** @param {string} listingId */
+  const withdrawingFor = (listingId) => state.withdrawing.has(pendingKey(state.userId, listingId));
 
   async function loadView() {
     const ticket = loads.next();
@@ -220,10 +232,41 @@ export function createController({ api, userId, filters, render, showMessage }) 
     await loadView();
   }
 
+  // The page asks for confirmation before calling this.
+  /** @param {string} listingId */
+  async function withdraw(listingId) {
+    const actingUserId = state.userId;
+    const key = pendingKey(actingUserId, listingId);
+    const listing = state.listings?.find((l) => l.id === listingId);
+    if (!listing || !canManage(listing, actingUserId) || state.withdrawing.has(key)) return;
+    state.withdrawing.add(key);
+    showMessage('');
+    render();
+
+    const { updated, failure } = await sendForListing(
+      `/api/listings/${encodeURIComponent(listingId)}/withdraw`,
+      { method: 'POST', userId: actingUserId },
+    );
+    state.withdrawing.delete(key);
+    if (updated) state.editing.delete(key);
+    if (state.userId !== actingUserId) return;
+    if (updated) {
+      state.listings = withoutListing(state.listings, listingId);
+      showMessage(`Withdrew "${updated.title}".`);
+    } else {
+      showMessage(errorMessage(failure), 'error');
+    }
+    render();
+    // A load still in flight may predate the withdraw and still hold the card.
+    // After a rejection (for example a sale meanwhile) it shows the card as it is now.
+    await loadView();
+  }
+
   return {
     state,
     pendingFor,
     draftFor,
+    withdrawingFor,
     loadView,
     reloadFresh,
     setView,
@@ -233,6 +276,7 @@ export function createController({ api, userId, filters, render, showMessage }) 
     updateDraft,
     cancelEdit,
     saveEdit,
+    withdraw,
   };
 
   /**

@@ -97,9 +97,11 @@ log line goes through `src/redact.js`, which masks credentials (including
   the filled heart to remove it. The page does not reload. Your own listings show
   the count but no heart.
 - **Saved** shows only your saved listings, most recently saved first. Search
-  and the on-sale filter do not apply there, and listings that were sold after
-  you saved them stay in the list marked **Sold**. When nothing is saved, the
-  view says so and offers a **Browse all listings** button.
+  and the on-sale filter do not apply there. Listings that were sold after you
+  saved them stay in the list marked **Sold**, and listings their seller
+  withdrew stay marked **Withdrawn**. Neither has a **Buy** button, both keep
+  their saved count, and the heart still removes them. When nothing is saved,
+  the view says so and offers a **Browse all listings** button.
 - If saving fails, for example because you already saved 100 listings, the page
   shows the server's message and the heart and count go back to what they were.
 - Your own listings that are on sale have an **Edit** button. It opens a form on
@@ -110,6 +112,13 @@ log line goes through `src/redact.js`, which masks credentials (including
   stays open with what you typed. An open form and its values stay while you
   search, filter or press hearts, and other users never see them. Sold listings
   cannot be edited.
+- Your own listings that are on sale also have a **Withdraw** button. It asks for
+  confirmation first; if you cancel, nothing changes. Once you confirm, the
+  listing disappears from All listings without reloading the page, for every
+  user and every search or filter. If the server refuses, for example because
+  the listing was bought in the meantime, the page shows its message and the
+  card stays. A page that still shows a withdrawn listing cannot buy or save it:
+  the page shows the server's message instead.
 
 ## API
 

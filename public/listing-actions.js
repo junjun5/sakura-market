@@ -70,3 +70,14 @@ export function replaceListing(listings, updated) {
   if (!listings?.some((listing) => listing.id === updated.id)) return listings;
   return listings.map((listing) => (listing.id === updated.id ? { ...listing, ...updated } : listing));
 }
+
+/**
+ * @template {{ id: string }} T
+ * @param {T[] | null} listings
+ * @param {string} id
+ * @returns {T[] | null}
+ */
+export function withoutListing(listings, id) {
+  if (!listings?.some((listing) => listing.id === id)) return listings;
+  return listings.filter((listing) => listing.id !== id);
+}

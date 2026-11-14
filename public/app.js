@@ -128,14 +128,30 @@ function openEdit(id) {
   form?.scrollIntoView({ block: 'nearest' });
 }
 
-// Shown only on the seller's own on-sale cards: the Edit button, or the open form.
+/** @param {ClientListing} listing */
+async function confirmWithdraw(listing) {
+  const question = `Withdraw "${listing.title}"? It will no longer be listed for sale.`;
+  if (!window.confirm(question)) return;
+  await controller.withdraw(listing.id);
+  // After a rejection the card is still there; its disabled button lost focus.
+  if (focusIsLost()) focusCardControl(listing.id, 'withdraw');
+}
+
+// Shown only on the seller's own on-sale cards: Edit and Withdraw, or the open form.
 /** @param {ClientListing} listing */
 function ownerControls(listing) {
   const draft = controller.draftFor(listing.id);
   if (draft) return editForm(listing, draft, editActions);
+  const withdrawing = controller.withdrawingFor(listing.id);
+  const edit = controlButton('Edit', 'edit', () => openEdit(listing.id));
+  const withdraw = controlButton(withdrawing ? 'Withdrawing…' : 'Withdraw', 'withdraw', () =>
+    confirmWithdraw(listing),
+  );
+  edit.disabled = withdrawing;
+  withdraw.disabled = withdrawing;
   const wrap = document.createElement('div');
   wrap.className = 'owner-actions';
-  wrap.append(controlButton('Edit', 'edit', () => openEdit(listing.id)));
+  wrap.append(edit, withdraw);
   return wrap;
 }
 

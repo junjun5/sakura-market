@@ -8,6 +8,7 @@ import {
   editBody,
   isEditField,
   replaceListing,
+  withoutListing,
 } from '../public/listing-actions.js';
 
 const helmet = {
@@ -80,4 +81,14 @@ test('listing actions: an edited listing replaces its card in place', () => {
   assert.equal(replaceListing(null, updated), null);
   const listings = [keyboard];
   assert.equal(replaceListing(listings, updated), listings);
+});
+
+test('listing actions: a withdrawn listing leaves the shown listings', () => {
+  assert.deepEqual(
+    withoutListing([keyboard, helmet], 'l2').map((l) => l.id),
+    ['l3'],
+  );
+  assert.equal(withoutListing(null, 'l2'), null);
+  const listings = [keyboard];
+  assert.equal(withoutListing(listings, 'l2'), listings);
 });
