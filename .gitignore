@@ -1,4 +1,25 @@
-node_modules/
+# Dependencies and local state
+# No trailing slash on node_modules: the pre-commit hook links it into its
+# snapshot, and a pattern ending in / does not match a symlink.
+node_modules
 .dev/
+coverage/
+reports/
+
+# Logs
 *.log
+
+# Local environment. Real values stay out of Git; the template is committed.
+.env
+.env.*
+!.env.example
+
+# Editors and IDEs
+.idea/
+.vscode/
+*.swp
+*~
+
+# OS files
 .DS_Store
+Thumbs.db

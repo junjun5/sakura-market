@@ -1,0 +1,10 @@
+{
+  "path": ["src", "public", "scripts", "test"],
+  "format": ["javascript"],
+  "minTokens": 50,
+  "minLines": 5,
+  "threshold": 2,
+  "reporters": ["console"],
+  "gitignore": true,
+  "absolute": false
+}

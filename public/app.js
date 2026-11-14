@@ -1,25 +1,35 @@
 // Browser client. Plain DOM, no framework, no build step.
-const $ = (selector) => document.querySelector(selector);
+import { createApiClient, createController, errorMessage } from './controller.js';
+import { canFavorite } from './favorites-state.js';
 
-const state = {
-  users: [],
+/**
+ * @typedef {import('./favorites-state.js').ClientListing} ClientListing
+ * @typedef {import('./controller.js').ClientUser} ClientUser
+ */
+
+// Every selector used here names an element in index.html.
+/** @param {string} selector */
+const $ = (selector) => /** @type {HTMLElement} */ (document.querySelector(selector));
+/** @param {string} selector */
+const $input = (selector) => /** @type {HTMLInputElement} */ ($(selector));
+/** @param {string} selector */
+const $all = (selector) => /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll(selector));
+
+const api = createApiClient((url, options) => fetch(url, options));
+
+const controller = createController({
+  api,
   userId: localStorage.getItem('userId') ?? 'u1',
-};
+  filters: () => ({ q: $input('#search').value, onSale: $input('#only-on-sale').checked }),
+  render,
+  showMessage,
+});
+const { state } = controller;
 
-async function api(path, { method = 'GET', body } = {}) {
-  const res = await fetch(path, {
-    method,
-    headers: {
-      'x-user-id': state.userId,
-      ...(body ? { 'content-type': 'application/json' } : {}),
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error?.message ?? 'Request failed.');
-  return data;
-}
-
+/**
+ * @param {string} text
+ * @param {string} [kind]
+ */
 function showMessage(text, kind = 'info') {
   const el = $('#message');
   el.textContent = text;
@@ -27,10 +37,41 @@ function showMessage(text, kind = 'info') {
   el.hidden = !text;
 }
 
+/** @param {string} id */
 function userName(id) {
   return state.users.find((u) => u.id === id)?.name ?? id;
 }
 
+/** @param {ClientListing} listing */
+function favoriteControls(listing) {
+  const pending = controller.pendingFor(listing.id);
+  const { savedByMe, savedCount } = pending ?? listing;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'favorite';
+
+  if (canFavorite(listing, state.userId)) {
+    const heart = document.createElement('button');
+    heart.type = 'button';
+    heart.className = 'heart';
+    heart.dataset.control = 'heart';
+    heart.setAttribute('aria-label', `Save ${listing.title}`);
+    heart.setAttribute('aria-pressed', String(savedByMe));
+    heart.title = savedByMe ? 'Remove from saved' : 'Save';
+    heart.textContent = savedByMe ? '♥' : '♡';
+    heart.disabled = Boolean(pending);
+    heart.addEventListener('click', () => controller.toggleFavorite(listing.id));
+    wrap.append(heart);
+  }
+
+  const count = document.createElement('span');
+  count.className = 'saved-count';
+  count.textContent = `${savedCount} saved`;
+  wrap.append(count);
+  return wrap;
+}
+
+/** @param {ClientListing} listing */
 function listingCard(listing) {
   const card = document.createElement('article');
   card.className = 'card';
@@ -65,39 +106,104 @@ function listingCard(listing) {
     action.addEventListener('click', () => buy(listing.id));
   }
 
-  card.append(title, description, price, seller, action);
+  card.append(title, description, price, seller, favoriteControls(listing), action);
   return card;
 }
 
-async function refresh() {
-  const params = new URLSearchParams();
-  const q = $('#search').value.trim();
-  if (q) params.set('q', q);
-  if ($('#only-on-sale').checked) params.set('status', 'on_sale');
-
-  const { listings } = await api(`/api/listings?${params}`);
-  const container = $('#listings');
-  container.replaceChildren(...listings.map(listingCard));
-  if (listings.length === 0) container.textContent = 'No listings found.';
+/** @param {string} text */
+function note(text) {
+  const p = document.createElement('p');
+  p.className = 'empty';
+  p.textContent = text;
+  return p;
 }
 
-async function buy(id) {
-  try {
-    const { listing } = await api(`/api/listings/${id}/purchase`, { method: 'POST' });
-    showMessage(`You bought "${listing.title}".`);
-  } catch (err) {
-    showMessage(err.message, 'error');
+function savedEmptyState() {
+  const wrap = document.createElement('div');
+  wrap.className = 'empty';
+  const text = document.createElement('p');
+  text.textContent = 'You have no saved listings yet. Press the heart on a listing to save it here.';
+  const back = document.createElement('button');
+  back.type = 'button';
+  back.textContent = 'Browse all listings';
+  back.addEventListener('click', () => controller.setView('all'));
+  wrap.append(text, back);
+  return wrap;
+}
+
+function renderNav() {
+  for (const tab of $all('.view-tab')) {
+    if (tab.dataset.view === state.view) tab.setAttribute('aria-current', 'page');
+    else tab.removeAttribute('aria-current');
   }
-  await refresh();
+  const saved = state.view === 'saved';
+  // Search and status filters belong to All only; their values are kept for when the user returns.
+  $('#filters').hidden = saved;
+  $('#view-hint').hidden = !saved;
+  $('#listings').setAttribute('aria-label', saved ? 'Saved listings' : 'Listings');
 }
 
+// Cards are rebuilt on every render, so a focused heart would otherwise drop
+// focus to the page. A settled toggle also reclaims focus its disabled
+// in-flight heart lost, unless the user has since focused something else.
+/** @param {{ settledListingId?: string }} [options] */
+function focusTarget({ settledListingId } = {}) {
+  const active = /** @type {HTMLElement | null} */ (document.activeElement);
+  const focused = focusedCardControl(active);
+  if (focused) return focused;
+  const focusLost = !active || active === document.body;
+  return focusLost && settledListingId ? { listingId: settledListingId, control: 'heart' } : null;
+}
+
+/** @param {HTMLElement | null} active */
+function focusedCardControl(active) {
+  const control = active?.dataset?.control;
+  if (!active || !control) return null;
+  const card = /** @type {HTMLElement | null} */ (active.closest('#listings [data-listing-id]'));
+  const listingId = card?.dataset.listingId;
+  return listingId ? { listingId, control } : null;
+}
+
+/** @param {{ settledListingId?: string }} [options] */
+function render(options) {
+  const target = focusTarget(options);
+  renderNav();
+  const container = $('#listings');
+  if (state.listings === null) {
+    container.replaceChildren(note(state.loadFailed ? 'Could not load listings.' : 'Loading…'));
+  } else if (state.listings.length === 0) {
+    container.replaceChildren(state.view === 'saved' ? savedEmptyState() : note('No listings found.'));
+  } else {
+    container.replaceChildren(...state.listings.map(listingCard));
+  }
+  if (target) {
+    const selector = `[data-listing-id="${CSS.escape(target.listingId)}"] [data-control="${target.control}"]`;
+    /** @type {HTMLElement | null} */ (container.querySelector(selector))?.focus();
+  }
+}
+
+/** @param {string} id */
+async function buy(id) {
+  const userId = state.userId;
+  try {
+    const { listing } = await api(`/api/listings/${id}/purchase`, { method: 'POST', userId });
+    if (state.userId === userId) showMessage(`You bought "${listing.title}".`);
+  } catch (err) {
+    if (state.userId === userId) showMessage(errorMessage(err), 'error');
+  }
+  await controller.loadView();
+}
+
+/** @param {SubmitEvent} event */
 async function sell(event) {
   event.preventDefault();
-  const form = event.currentTarget;
+  const form = /** @type {HTMLFormElement} */ (event.currentTarget);
   const data = new FormData(form);
+  const userId = state.userId;
   try {
     const { listing } = await api('/api/listings', {
       method: 'POST',
+      userId,
       body: {
         title: data.get('title'),
         description: data.get('description'),
@@ -105,35 +211,38 @@ async function sell(event) {
       },
     });
     form.reset();
-    showMessage(`Listed "${listing.title}".`);
+    if (state.userId === userId) showMessage(`Listed "${listing.title}".`);
   } catch (err) {
-    showMessage(err.message, 'error');
+    if (state.userId === userId) showMessage(errorMessage(err), 'error');
   }
-  await refresh();
+  await controller.loadView();
 }
 
 async function init() {
-  const { users } = await api('/api/users');
+  const { users } = /** @type {{ users: ClientUser[] }} */ (
+    await api('/api/users', { userId: state.userId })
+  );
   state.users = users;
   if (!users.some((u) => u.id === state.userId)) state.userId = users[0].id;
 
-  const select = $('#user-select');
+  const select = /** @type {HTMLSelectElement} */ ($('#user-select'));
   for (const user of users) {
     const option = new Option(user.name, user.id, false, user.id === state.userId);
     select.add(option);
   }
   select.addEventListener('change', () => {
-    state.userId = select.value;
-    localStorage.setItem('userId', state.userId);
-    showMessage('');
-    refresh();
+    localStorage.setItem('userId', select.value);
+    controller.setUser(select.value);
   });
 
-  $('#search').addEventListener('input', refresh);
-  $('#only-on-sale').addEventListener('change', refresh);
+  for (const tab of $all('.view-tab')) {
+    tab.addEventListener('click', () => controller.setView(tab.dataset.view ?? 'all'));
+  }
+  $('#search').addEventListener('input', () => controller.loadView());
+  $('#only-on-sale').addEventListener('change', () => controller.loadView());
   $('#sell-form').addEventListener('submit', sell);
 
-  await refresh();
+  await controller.reloadFresh();
 }
 
-init().catch((err) => showMessage(err.message, 'error'));
+init().catch((err) => showMessage(errorMessage(err), 'error'));

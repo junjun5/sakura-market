@@ -1,0 +1,56 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  secret-scan:
+    name: secret-scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write # gitleaks comments on the lines that contain a leak
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # scan the full history, not just the tip
+          persist-credentials: false
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dast:
+    # Dynamic scan of the running server with the OWASP ZAP baseline scan.
+    # Report-only for now (fail_action: false): the HTML/JSON/Markdown report is
+    # uploaded as the `zap-baseline` artifact. Rule levels live in .zap/rules.tsv.
+    name: dast
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 20
+      - name: Start server
+        run: scripts/dev.sh start
+      - uses: zaproxy/action-baseline@de8ad967d3548d44ef623df22cf95c3b0baf8b25 # v0.15.0
+        with:
+          target: http://localhost:3000
+          rules_file_name: .zap/rules.tsv
+          allow_issue_writing: false
+          fail_action: false
+          artifact_name: zap-baseline
+      - name: Server log
+        if: always()
+        run: scripts/dev.sh logs 200 || true

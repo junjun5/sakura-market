@@ -16,10 +16,19 @@
     </header>
 
     <main>
-      <section class="toolbar">
+      <nav class="views" aria-label="Listing views">
+        <button type="button" class="view-tab" data-view="all">All listings</button>
+        <button type="button" class="view-tab" data-view="saved">Saved</button>
+      </nav>
+
+      <section id="filters" class="toolbar">
         <input id="search" type="search" placeholder="Search by title" aria-label="Search by title" />
         <label><input id="only-on-sale" type="checkbox" /> On sale only</label>
       </section>
+
+      <p id="view-hint" class="hint" hidden>
+        Your saved listings, most recently saved first. Search and filters do not apply here.
+      </p>
 
       <p id="message" class="message" role="status" hidden></p>
 

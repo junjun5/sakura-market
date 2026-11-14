@@ -5,6 +5,11 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+# The health check below needs the port the server will use. src/server.js loads
+# the rest of .env itself; like it, a PORT already set in the shell wins.
+if [[ -z "${PORT:-}" && -f .env ]]; then
+  PORT="$(sed -n -E 's/^[[:space:]]*PORT[[:space:]]*=[[:space:]]*["'\'']?([0-9]+).*/\1/p' .env | tail -n 1)"
+fi
 PORT="${PORT:-3000}"
 STATE_DIR=".dev"
 PID_FILE="$STATE_DIR/server.pid"

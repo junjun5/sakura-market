@@ -1,0 +1,19 @@
+{
+  "name": "sakura-market-mini",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:22-bookworm",
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": { "label": "sakura-market-mini", "onAutoForward": "notify" }
+  },
+  "postCreateCommand": "npm run setup",
+  "customizations": {
+    "vscode": {
+      "extensions": ["dbaeumer.vscode-eslint", "esbenp.prettier-vscode"],
+      "settings": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.formatOnSave": true,
+        "js/ts.implicitProjectConfig.checkJs": true
+      }
+    }
+  }
+}

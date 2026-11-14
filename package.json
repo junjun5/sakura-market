@@ -8,9 +8,32 @@
     "node": ">=20"
   },
   "scripts": {
+    "setup": "npm ci && scripts/install-hooks.sh",
     "start": "node src/server.js",
     "dev": "bash scripts/dev.sh",
-    "test": "node --test",
-    "check": "bash scripts/check.sh"
+    "test": "node --test test/*.test.js",
+    "test:coverage": "mkdir -p reports && node --test --experimental-test-coverage --test-coverage-include='src/**' --test-coverage-include='public/**' --test-coverage-lines=95 --test-coverage-branches=90 --test-coverage-functions=95 --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=reports/junit.xml --test-reporter=lcov --test-reporter-destination=reports/lcov.info test/*.test.js",
+    "test:report": "node scripts/timing-report.js reports/junit.xml",
+    "test:flaky": "node scripts/flaky-tests.js",
+    "check": "bash scripts/check.sh",
+    "lint": "eslint .",
+    "typecheck": "tsc -p .",
+    "knip": "knip",
+    "dup": "jscpd",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "debt": "node scripts/repo-checks.js --debt",
+    "docs:api": "node scripts/gen-api-docs.js",
+    "profile": "node scripts/profile.js"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "@types/node": "20.19.43",
+    "eslint": "10.14.0",
+    "globals": "17.14.0",
+    "jscpd": "5.4.2",
+    "knip": "6.44.1",
+    "prettier": "3.9.10",
+    "typescript": "7.0.2"
   }
 }

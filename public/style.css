@@ -4,7 +4,11 @@
   --line: #e2e8f0;
   --accent: #ea580c;
   --bg: #fafaf9;
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
   color: var(--ink);
 }
 
@@ -56,6 +60,35 @@ main {
   gap: 16px;
   align-items: center;
   margin-bottom: 16px;
+}
+
+.toolbar[hidden] {
+  display: none;
+}
+
+.views {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.views .view-tab {
+  margin-top: 0;
+  background: #fff;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
+.views .view-tab[aria-current='page'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.hint {
+  margin: 0 0 16px;
+  font-size: 14px;
+  color: var(--muted);
 }
 
 .toolbar input[type='search'] {
@@ -114,6 +147,49 @@ main {
   font-size: 18px;
   font-weight: 700;
   color: var(--ink);
+}
+
+.favorite {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.favorite .heart {
+  margin-top: 0;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--accent);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.favorite .heart[aria-pressed='true'] {
+  background: #fff7ed;
+  border-color: var(--accent);
+}
+
+.favorite .heart:disabled {
+  background: #fff;
+  opacity: 0.5;
+  cursor: progress;
+}
+
+.empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.empty p {
+  margin: 0;
 }
 
 button {

@@ -1,0 +1,1058 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "sakura-market-mini API",
+    "version": "0.1.0",
+    "description": "HTTP API of the sakura-market-mini demo marketplace. Every response is JSON except `GET /api/metrics`, and errors look like `{ \"error\": { \"code\": \"...\", \"message\": \"...\" } }`. Every response carries an `X-Request-ID` header; send your own to correlate logs. Auth is a mock: send `X-User-Id: u1` (Hana), `u2` (Ken) or `u3` (Mio). Data lives in memory and resets when the server restarts."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Local server (`scripts/dev.sh start`)"
+    }
+  ],
+  "tags": [
+    {
+      "name": "system"
+    },
+    {
+      "name": "users"
+    },
+    {
+      "name": "listings"
+    },
+    {
+      "name": "favorites"
+    }
+  ],
+  "paths": {
+    "/api/health": {
+      "get": {
+        "operationId": "getHealth",
+        "tags": ["system"],
+        "summary": "Liveness check",
+        "responses": {
+          "200": {
+            "description": "The server is up.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["ok"],
+                  "properties": {
+                    "ok": {
+                      "const": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error. The details are in the server log under the same request ID.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "x-error-codes": ["internal"],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ]
+      }
+    },
+    "/api/metrics": {
+      "get": {
+        "operationId": "getMetrics",
+        "tags": ["system"],
+        "summary": "Request and process metrics in the Prometheus text format",
+        "description": "Request counts and durations by method, route pattern and status, plus uptime and memory. Turned off with `FEATURE_FLAGS=metrics_endpoint=off`, in which case the route answers `404 route_not_found`.",
+        "responses": {
+          "200": {
+            "description": "Prometheus text exposition format 0.0.4.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error. The details are in the server log under the same request ID.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "x-error-codes": ["internal"],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ]
+      }
+    },
+    "/api/users": {
+      "get": {
+        "operationId": "listUsers",
+        "tags": ["users"],
+        "summary": "Seed users",
+        "responses": {
+          "200": {
+            "description": "All users.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["users"],
+                  "properties": {
+                    "users": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/User"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error. The details are in the server log under the same request ID.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "x-error-codes": ["internal"],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ]
+      }
+    },
+    "/api/me": {
+      "get": {
+        "operationId": "getMe",
+        "tags": ["users"],
+        "summary": "The calling user",
+        "security": [
+          {
+            "UserId": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The user named by `X-User-Id`.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["user"],
+                  "properties": {
+                    "user": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No `X-User-Id` header, or it names no known user.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "x-error-codes": ["unauthorized"],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error. The details are in the server log under the same request ID.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "x-error-codes": ["internal"],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ]
+      }
+    },
+    "/api/me/favorites": {
+      "get": {
+        "operationId": "listMyFavorites",
+        "tags": ["favorites"],
+        "summary": "The caller's saved listings, most recently saved first",
+        "description": "Always the caller's whole list: query parameters are ignored. Listings sold after they were saved stay in the list with `status: \"sold\"`.",
+        "security": [
+          {
+            "UserId": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Saved listings.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["listings"],
+                  "properties": {
+                    "listings": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Listing"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No `X-User-Id` header, or it names no known user.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "x-error-codes": ["unauthorized"],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error. The details are in the server log under the same request ID.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "x-error-codes": ["internal"],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ]
+      }
+    },
+    "/api/listings": {
+      "get": {
+        "operationId": "listListings",
+        "tags": ["listings"],
+        "summary": "List listings, newest first",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Only listings with this status.",
+            "schema": {
+              "$ref": "#/components/schemas/ListingStatus"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "Case-insensitive search in titles.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching listings.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["listings"],
+                  "properties": {
+                    "listings": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Listing"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`status` is not a known status.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "x-error-codes": ["invalid_status"],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error. The details are in the server log under the same request ID.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "x-error-codes": ["internal"],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createListing",
+        "tags": ["listings"],
+        "summary": "Create a listing for the caller",
+        "security": [
+          {
+            "UserId": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "required": ["title", "priceYen"],
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80,
+                    "description": "Trimmed; 1 to 80 characters."
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 1000,
+                    "description": "Trimmed; up to 1000 characters."
+                  },
+                  "priceYen": {
+                    "type": "integer",
+                    "minimum": 300,
+                    "maximum": 9999999
+                  }
+                },
+                "description": "Other fields are ignored."
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The new listing, on sale.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["listing"],
+                  "properties": {
+                    "listing": {
+                      "$ref": "#/components/schemas/Listing"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not valid JSON, is larger than 64 KiB, or breaks a field rule.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "x-error-codes": [
+              "invalid_json",
+              "body_too_large",
+              "invalid_title",
+              "invalid_description",
+              "invalid_price"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No `X-User-Id` header, or it names no known user.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "x-error-codes": ["unauthorized"],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error. The details are in the server log under the same request ID.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "x-error-codes": ["internal"],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ]
+      }
+    },
+    "/api/listings/{id}": {
+      "get": {
+        "operationId": "getListing",
+        "tags": ["listings"],
+        "summary": "One listing",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ListingId"
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The listing.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["listing"],
+                  "properties": {
+                    "listing": {
+                      "$ref": "#/components/schemas/Listing"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The listing does not exist.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "x-error-codes": ["listing_not_found"],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error. The details are in the server log under the same request ID.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "x-error-codes": ["internal"],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/listings/{id}/purchase": {
+      "post": {
+        "operationId": "purchaseListing",
+        "tags": ["listings"],
+        "summary": "Buy a listing",
+        "security": [
+          {
+            "UserId": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ListingId"
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The listing, now sold to the caller.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["listing"],
+                  "properties": {
+                    "listing": {
+                      "$ref": "#/components/schemas/Listing"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No `X-User-Id` header, or it names no known user.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "x-error-codes": ["unauthorized"],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The listing does not exist.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "x-error-codes": ["listing_not_found"],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The caller is the seller, or the listing is already sold.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "x-error-codes": ["own_listing", "already_sold"],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error. The details are in the server log under the same request ID.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "x-error-codes": ["internal"],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/listings/{id}/favorite": {
+      "put": {
+        "operationId": "saveListing",
+        "tags": ["favorites"],
+        "summary": "Save a listing for the caller",
+        "description": "Saving a listing that is already saved succeeds and changes nothing. Sold listings can be saved. A user can keep at most 100 saved listings.",
+        "security": [
+          {
+            "UserId": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ListingId"
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The listing with its updated `savedCount` and `savedByMe: true`.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["listing"],
+                  "properties": {
+                    "listing": {
+                      "$ref": "#/components/schemas/Listing"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No `X-User-Id` header, or it names no known user.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "x-error-codes": ["unauthorized"],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The listing does not exist.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "x-error-codes": ["listing_not_found"],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The caller is the seller, or already has 100 saved listings.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "x-error-codes": ["own_listing", "favorites_limit_reached"],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error. The details are in the server log under the same request ID.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "x-error-codes": ["internal"],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "removeSavedListing",
+        "tags": ["favorites"],
+        "summary": "Remove a listing from the caller's saved items",
+        "description": "Removing a listing that is not saved succeeds and changes nothing.",
+        "security": [
+          {
+            "UserId": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ListingId"
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The listing with its updated `savedCount` and `savedByMe: false`.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["listing"],
+                  "properties": {
+                    "listing": {
+                      "$ref": "#/components/schemas/Listing"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No `X-User-Id` header, or it names no known user.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "x-error-codes": ["unauthorized"],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The listing does not exist.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "x-error-codes": ["listing_not_found"],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error. The details are in the server log under the same request ID.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "x-error-codes": ["internal"],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "UserId": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-User-Id",
+        "description": "Mock auth: the ID of a seed user (`u1`, `u2`, `u3`)."
+      }
+    },
+    "headers": {
+      "RequestId": {
+        "description": "The request ID: the caller's `X-Request-ID` if it is 1 to 128 characters of `A-Z a-z 0-9 . _ : -`, otherwise a new UUID.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "parameters": {
+      "ListingId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Listing ID, for example `l2`.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "RequestIdHeader": {
+        "name": "X-Request-ID",
+        "in": "header",
+        "required": false,
+        "description": "Optional ID to correlate this request with server logs.",
+        "schema": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+        }
+      }
+    },
+    "schemas": {
+      "User": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name"],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "ListingStatus": {
+        "type": "string",
+        "enum": ["on_sale", "sold"]
+      },
+      "Listing": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "title",
+          "description",
+          "priceYen",
+          "sellerId",
+          "status",
+          "buyerId",
+          "createdAt",
+          "savedCount",
+          "savedByMe"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "priceYen": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sellerId": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ListingStatus"
+          },
+          "buyerId": {
+            "type": ["string", "null"]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "savedCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "How many users saved the listing. Public."
+          },
+          "savedByMe": {
+            "type": "boolean",
+            "description": "Whether the caller saved it; false for guests."
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["code", "message"],
+            "properties": {
+              "code": {
+                "type": "string",
+                "pattern": "^[a-z]+(_[a-z]+)*$"
+              },
+              "message": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
