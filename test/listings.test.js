@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { AppError } from '../src/errors.js';
 import { createListingService, MAX_TITLE_LENGTH, MIN_PRICE_YEN } from '../src/listings.js';
 import { createStore } from '../src/store.js';
+import { assertAppError } from './support/errors.js';
 
 const hana = { id: 'u1', name: 'Hana' };
 const ken = { id: 'u2', name: 'Ken' };
@@ -12,15 +12,6 @@ function setup() {
   const store = createStore();
   const service = createListingService(store, { now: () => new Date('2026-05-01T00:00:00.000Z') });
   return { store, service };
-}
-
-function assertAppError(fn, status, code) {
-  assert.throws(fn, (err) => {
-    assert.ok(err instanceof AppError, `expected AppError, got ${err}`);
-    assert.equal(err.status, status);
-    assert.equal(err.code, code);
-    return true;
-  });
 }
 
 test('list returns newest first', () => {
@@ -60,6 +51,7 @@ test('create stores a new on-sale listing owned by the caller', () => {
     status: 'on_sale',
     buyerId: null,
     createdAt: '2026-05-01T00:00:00.000Z',
+    updatedAt: null,
   });
   assert.equal(service.list()[0].id, 'l6');
 });

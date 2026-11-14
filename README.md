@@ -97,11 +97,28 @@ log line goes through `src/redact.js`, which masks credentials (including
   the filled heart to remove it. The page does not reload. Your own listings show
   the count but no heart.
 - **Saved** shows only your saved listings, most recently saved first. Search
-  and the on-sale filter do not apply there, and listings that were sold after
-  you saved them stay in the list marked **Sold**. When nothing is saved, the
-  view says so and offers a **Browse all listings** button.
+  and the on-sale filter do not apply there. Listings that were sold after you
+  saved them stay in the list marked **Sold**, and listings their seller
+  withdrew stay marked **Withdrawn**. Neither has a **Buy** button, both keep
+  their saved count, and the heart still removes them. When nothing is saved,
+  the view says so and offers a **Browse all listings** button.
 - If saving fails, for example because you already saved 100 listings, the page
   shows the server's message and the heart and count go back to what they were.
+- Your own listings that are on sale have an **Edit** button. It opens a form on
+  the card with the current title, description and price. **Save** updates the
+  card without reloading the page, and the card keeps its place. **Cancel**
+  closes the form without changes. If the server rejects a change, for example a
+  price below ¥300 or an empty title, the page shows its message and the form
+  stays open with what you typed. An open form and its values stay while you
+  search, filter or press hearts, and other users never see them. Sold listings
+  cannot be edited.
+- Your own listings that are on sale also have a **Withdraw** button. It asks for
+  confirmation first; if you cancel, nothing changes. Once you confirm, the
+  listing disappears from All listings without reloading the page, for every
+  user and every search or filter. If the server refuses, for example because
+  the listing was bought in the meantime, the page shows its message and the
+  card stays. A page that still shows a withdrawn listing cannot buy or save it:
+  the page shows the server's message instead.
 
 ## API
 
@@ -111,19 +128,72 @@ response has an `X-Request-ID` header. Errors look like `{ "error": { "code": ".
 "Auth" is a mock: send `X-User-Id: u1` (Hana), `u2` (Ken) or `u3` (Mio).
 Routes marked "yes" answer `401 unauthorized` without a known user.
 
-| Method | Path                                  | Auth | What it does                                                                   |
-| ------ | ------------------------------------- | ---- | ------------------------------------------------------------------------------ |
-| GET    | `/api/health`                         | no   | Liveness check                                                                 |
-| GET    | `/api/metrics`                        | no   | Prometheus metrics (flag `metrics_endpoint`, on by default)                    |
-| GET    | `/api/users`                          | no   | Seed users                                                                     |
-| GET    | `/api/me`                             | yes  | The calling user                                                               |
-| GET    | `/api/listings?status=on_sale&q=text` | no   | List, filter by status, search by title                                        |
-| GET    | `/api/listings/:id`                   | no   | One listing                                                                    |
-| POST   | `/api/listings`                       | yes  | Create a listing (`title`, `description`, `priceYen`)                          |
-| POST   | `/api/listings/:id/purchase`          | yes  | Buy a listing                                                                  |
-| PUT    | `/api/listings/:id/favorite`          | yes  | Save a listing for the caller; returns `{ listing }`                           |
-| DELETE | `/api/listings/:id/favorite`          | yes  | Remove a listing from the caller's saved items; returns `{ listing }`          |
-| GET    | `/api/me/favorites`                   | yes  | The caller's saved listings, most recently saved first; returns `{ listings }` |
+| Method | Path                                  | Auth | What it does                                                                            |
+| ------ | ------------------------------------- | ---- | --------------------------------------------------------------------------------------- |
+| GET    | `/api/health`                         | no   | Liveness check                                                                          |
+| GET    | `/api/metrics`                        | no   | Prometheus metrics (flag `metrics_endpoint`, on by default)                             |
+| GET    | `/api/users`                          | no   | Seed users                                                                              |
+| GET    | `/api/me`                             | yes  | The calling user                                                                        |
+| GET    | `/api/listings?status=on_sale&q=text` | no   | List, filter by status (`on_sale` or `sold`), search by title; never withdrawn listings |
+| GET    | `/api/listings/:id`                   | no   | One listing, including a withdrawn one                                                  |
+| POST   | `/api/listings`                       | yes  | Create a listing (`title`, `description`, `priceYen`)                                   |
+| PATCH  | `/api/listings/:id`                   | yes  | Change the title, description or price of your on-sale listing; returns `{ listing }`   |
+| POST   | `/api/listings/:id/withdraw`          | yes  | Withdraw your on-sale listing from sale; returns `{ listing }`                          |
+| POST   | `/api/listings/:id/purchase`          | yes  | Buy a listing                                                                           |
+| PUT    | `/api/listings/:id/favorite`          | yes  | Save a listing for the caller; returns `{ listing }`                                    |
+| DELETE | `/api/listings/:id/favorite`          | yes  | Remove a listing from the caller's saved items; returns `{ listing }`                   |
+| GET    | `/api/me/favorites`                   | yes  | The caller's saved listings, most recently saved first; returns `{ listings }`          |
+
+### Editing listings
+
+`PATCH /api/listings/:id` changes a listing you sell. Send any of `title`,
+`description` and `priceYen`; fields you leave out keep their values.
+
+Rules:
+
+- The new values follow the rules for a new listing: `title` is required and at
+  most 80 characters, `description` at most 1000 characters (both are trimmed),
+  and `priceYen` an integer from 300 to 9,999,999. A bad value fails with
+  `400 invalid_title`, `invalid_description` or `invalid_price`, and then nothing
+  changes, not even the fields that were valid.
+- Other fields, such as `status`, `sellerId`, `buyerId`, `createdAt` or
+  `updatedAt`, are ignored. A body with none of the three fields fails with
+  `400 no_changes`.
+- Only the seller can edit: anyone else gets `403 not_seller`. A sold listing
+  fails with `409 already_sold`, and a withdrawn one with `409 listing_withdrawn`.
+- `updatedAt` is `null` until the first edit, then the time of the latest edit
+  (ISO 8601, UTC). `createdAt` never changes, so an edit does not move the
+  listing in `GET /api/listings`, and its saves and saved count stay the same.
+
+```bash
+curl -X PATCH -H 'X-User-Id: u2' -H 'Content-Type: application/json' \
+  -d '{"priceYen":3900}' http://localhost:3000/api/listings/l2
+```
+
+### Withdrawing listings
+
+`POST /api/listings/:id/withdraw` takes a listing you sell off sale. Its
+`status` becomes `withdrawn`.
+
+Rules:
+
+- Only the seller can withdraw, and only while the listing is on sale: anyone
+  else gets `403 not_seller`, and a sold listing fails with `409 already_sold`.
+  The seller check comes first, so another user gets `403` even for a listing
+  that is already withdrawn.
+- Withdrawing again succeeds and changes nothing.
+- Withdrawing is not an edit: `updatedAt` stays as it was, and the listing keeps
+  its saves and saved count.
+- Withdrawn listings are hidden from `GET /api/listings` and its search, for
+  everyone including the seller, but can still be opened by ID with
+  `GET /api/listings/:id`. `?status=withdrawn` fails with `400 invalid_status`.
+- Withdrawn listings cannot be bought or newly saved: `409 listing_withdrawn`
+  (the seller still gets `409 own_listing`). They cannot be edited either.
+- There is no way to put a withdrawn listing back on sale.
+
+```bash
+curl -X POST -H 'X-User-Id: u2' http://localhost:3000/api/listings/l3/withdraw
+```
 
 ### Favorites
 
@@ -140,10 +210,14 @@ Rules:
 - Removing a listing and saving it again moves it to the front of your saved list.
 - You cannot save your own listing: `409 own_listing`.
 - You can keep at most 100 saved listings. Saving another one fails with
-  `409 favorites_limit_reached` until you remove one. Sold listings count too.
+  `409 favorites_limit_reached` until you remove one. Sold and withdrawn listings count too.
 - Saving or removing a listing that does not exist fails with `404 listing_not_found`.
 - Sold listings can be saved and removed. A saved listing that is later sold
   stays in your saved list with `status: "sold"`.
+- Withdrawn listings cannot be newly saved: `409 listing_withdrawn`. A saved
+  listing that is later withdrawn stays in your saved list, at the same position,
+  with `status: "withdrawn"`. You can remove it, and saving it again while it is
+  still saved succeeds and changes nothing.
 - `/api/me/favorites` always returns the caller's own list. It takes no filters.
 
 ```bash
@@ -168,6 +242,8 @@ src/flags.js               feature flags and FEATURE_FLAGS parsing
 public/                    browser client (plain HTML/CSS/JS)
 public/controller.js       client page state and ordering of loads and favorite toggles
 public/favorites-state.js  pure helpers for the client's Favorites state
+public/listing-actions.js  pure helpers for a card's buttons and the seller's edit requests
+public/edit-form.js        inline edit form on the seller's own card (DOM only)
 test/                      node:test suites (test/<topic>.test.js); helpers in test/support/
 scripts/                   dev server, quality gate, repo checks, API docs, test reports, profiling
 docs/api/                  OpenAPI schema and the API reference generated from it

@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import { createLogger } from '../src/logger.js';
 import { REDACTED } from '../src/redact.js';
 import { createStore } from '../src/store.js';
+import { assertError, LISTING_KEYS } from './support/api.js';
 import { withServer } from './support/server.js';
 
 test('GET /api/health', () =>
@@ -123,18 +124,6 @@ const HELMET = 'l2'; // Ken's
 const KEYBOARD = 'l3'; // Ken's
 const STOVE = 'l4'; // Mio's, already sold
 const BOOKS = 'l5'; // Mio's
-const LISTING_KEYS = [
-  'buyerId',
-  'createdAt',
-  'description',
-  'id',
-  'priceYen',
-  'savedByMe',
-  'savedCount',
-  'sellerId',
-  'status',
-  'title',
-];
 
 const ids = (res) => res.body.listings.map((l) => l.id);
 const savedIds = async (call, userId) => ids(await call('GET', '/api/me/favorites', { userId }));
@@ -163,6 +152,7 @@ function bulkStore(count, { soldEvery = 0 } = {}) {
       status: sold ? 'sold' : 'on_sale',
       buyerId: sold ? 'u3' : null,
       createdAt: '2026-04-01T09:00:00.000Z',
+      updatedAt: null,
     };
   });
   return createStore({ listings });
@@ -173,15 +163,6 @@ async function saveAll(call, userId, listingIds) {
     const res = await call('PUT', `/api/listings/${id}/favorite`, { userId });
     assert.equal(res.status, 200, `saving ${id}: ${JSON.stringify(res.body)}`);
   }
-}
-
-function assertError(res, status, code) {
-  assert.equal(res.status, status, JSON.stringify(res.body));
-  assert.deepEqual(Object.keys(res.body), ['error']);
-  assert.deepEqual(Object.keys(res.body.error).sort(), ['code', 'message']);
-  assert.equal(res.body.error.code, code);
-  assert.match(res.body.error.code, /^[a-z]+(_[a-z]+)*$/);
-  assert.ok(res.body.error.message.length > 0);
 }
 
 // Favorite information on a listing is only the aggregate count and the caller's flag.

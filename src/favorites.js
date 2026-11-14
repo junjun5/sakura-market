@@ -1,6 +1,7 @@
 // Business rules for favorites (saved listings). No HTTP here: functions take
 // plain values and throw AppError when a rule is broken.
 import { conflict, notFound } from './errors.js';
+import { listingWithdrawn } from './listings.js';
 
 /**
  * @typedef {import('./store.js').Store} Store
@@ -56,6 +57,7 @@ export function createFavoriteService(store, { now = () => new Date() } = {}) {
     }
     // Checked before the limit so a repeated save at capacity still succeeds.
     if (store.getFavorite(user.id, listingId)) return decorate(listing, user);
+    if (listing.status === 'withdrawn') throw listingWithdrawn();
     if (store.countFavoritesByUser(user.id) >= MAX_FAVORITES) {
       throw conflict(
         'favorites_limit_reached',

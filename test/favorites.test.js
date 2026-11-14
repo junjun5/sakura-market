@@ -5,6 +5,7 @@ import { AppError } from '../src/errors.js';
 import { createFavoriteService, MAX_FAVORITES } from '../src/favorites.js';
 import { createListingService } from '../src/listings.js';
 import { createStore } from '../src/store.js';
+import { assertAppError } from './support/errors.js';
 
 const hana = { id: 'u1', name: 'Hana' };
 const ken = { id: 'u2', name: 'Ken' };
@@ -40,22 +41,13 @@ function bulkStore(count, { soldEvery = 0 } = {}) {
     status: soldEvery && (i + 1) % soldEvery === 0 ? 'sold' : 'on_sale',
     buyerId: soldEvery && (i + 1) % soldEvery === 0 ? 'u3' : null,
     createdAt: '2026-04-01T09:00:00.000Z',
+    updatedAt: null,
   }));
   return createStore({ listings });
 }
 
 function savedIds(favorites, user) {
   return favorites.listSaved(user).map((l) => l.id);
-}
-
-function assertAppError(fn, status, code) {
-  assert.throws(fn, (err) => {
-    assert.ok(err instanceof AppError, `expected AppError, got ${err}`);
-    assert.equal(err.status, status);
-    assert.equal(err.code, code);
-    assert.ok(err.message.length > 0);
-    return true;
-  });
 }
 
 test('MAX_FAVORITES is 100', () => {
@@ -382,4 +374,79 @@ test('sold saves count toward the limit', () => {
   assert.equal(favorites.save(hana, `b${MAX_FAVORITES}`).savedByMe, true);
   assertAppError(() => favorites.save(hana, `b${MAX_FAVORITES + 1}`), 409, 'favorites_limit_reached');
   assert.equal(savedIds(favorites, hana).length, MAX_FAVORITES);
+});
+
+test('a withdrawn listing cannot be newly saved', () => {
+  const { store, favorites } = setup();
+  const listings = createListingService(store);
+  favorites.save(hana, 'l3');
+  listings.withdraw(ken, 'l3');
+  assertAppError(() => favorites.save(mio, 'l3'), 409, 'listing_withdrawn');
+  assert.equal(store.getFavorite('u3', 'l3'), null);
+  assert.deepEqual(savedIds(favorites, mio), []);
+  assert.equal(favorites.decorate(store.getListing('l3'), null).savedCount, 1);
+  assertAppError(() => favorites.save(ken, 'l3'), 409, 'own_listing');
+  assertAppError(() => favorites.save(mio, 'nope'), 404, 'listing_not_found');
+});
+
+test('saving an already-saved withdrawn listing again changes nothing', () => {
+  const { store, clock, favorites } = setup();
+  const listings = createListingService(store);
+  favorites.save(hana, 'l3');
+  clock.advance();
+  favorites.save(hana, HELMET);
+  listings.withdraw(ken, 'l3');
+  clock.advance();
+
+  const again = favorites.save(hana, 'l3');
+  assert.deepEqual([again.status, again.savedByMe, again.savedCount], ['withdrawn', true, 1]);
+  assert.deepEqual(savedIds(favorites, hana), [HELMET, 'l3']);
+
+  const removed = favorites.remove(hana, 'l3');
+  assert.deepEqual([removed.status, removed.savedByMe, removed.savedCount], ['withdrawn', false, 0]);
+  assertAppError(() => favorites.save(hana, 'l3'), 409, 'listing_withdrawn');
+  assert.deepEqual(savedIds(favorites, hana), [HELMET]);
+});
+
+test('a saved listing that is later withdrawn stays in place with its saved count', () => {
+  const { store, clock, favorites } = setup();
+  const listings = createListingService(store);
+  for (const id of ['l3', 'l5', HELMET]) {
+    favorites.save(hana, id);
+    clock.advance();
+  }
+  favorites.save(mio, 'l3');
+  listings.withdraw(ken, 'l3');
+
+  const saved = favorites.listSaved(hana);
+  assert.deepEqual(
+    saved.map((l) => [l.id, l.status]),
+    [
+      [HELMET, 'on_sale'],
+      ['l5', 'on_sale'],
+      ['l3', 'withdrawn'],
+    ],
+  );
+  assert.deepEqual([saved[2].savedCount, saved[2].savedByMe], [2, true]);
+  assert.deepEqual(savedIds(favorites, mio), ['l3']);
+});
+
+test('withdrawn saves count toward the limit', () => {
+  const { store, favorites } = setup({ store: bulkStore(MAX_FAVORITES + 2) });
+  const listings = createListingService(store);
+  for (let i = 1; i <= MAX_FAVORITES; i += 1) favorites.save(hana, `b${i}`);
+  listings.withdraw(ken, 'b1');
+  listings.withdraw(ken, `b${MAX_FAVORITES + 2}`);
+  const saved = favorites.listSaved(hana);
+  assert.equal(saved.length, MAX_FAVORITES);
+  assert.equal(saved.filter((l) => l.status === 'withdrawn').length, 1);
+
+  assertAppError(() => favorites.save(hana, `b${MAX_FAVORITES + 1}`), 409, 'favorites_limit_reached');
+  // At capacity a withdrawn listing still gets the withdrawn error, which is checked first.
+  assertAppError(() => favorites.save(hana, `b${MAX_FAVORITES + 2}`), 409, 'listing_withdrawn');
+  assert.equal(favorites.save(hana, 'b1').savedByMe, true);
+
+  favorites.remove(hana, 'b1');
+  assert.equal(savedIds(favorites, hana).length, MAX_FAVORITES - 1);
+  assert.equal(favorites.save(hana, `b${MAX_FAVORITES + 1}`).savedByMe, true);
 });

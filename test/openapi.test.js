@@ -85,13 +85,15 @@ test('the schema validator catches the mismatches the contract tests rely on', (
     status: 'on_sale',
     buyerId: null,
     createdAt: '2026-05-01T00:00:00.000Z',
+    updatedAt: null,
     savedCount: 0,
     savedByMe: false,
   };
   assert.deepEqual(validate(spec, listing, good), []);
+  assert.deepEqual(validate(spec, listing, { ...good, updatedAt: '2026-05-02T00:00:00.000Z' }), []);
   assert.deepEqual(validate(spec, listing, { ...good, extra: 1 }), ['$.extra: not in the schema']);
   assert.deepEqual(validate(spec, listing, { ...good, status: 'archived' }), [
-    '$.status: expected one of on_sale, sold',
+    '$.status: expected one of on_sale, sold, withdrawn',
   ]);
   const { savedCount, ...withoutCount } = good;
   assert.equal(savedCount, 0);
@@ -163,6 +165,75 @@ test('write routes answer what openapi.json documents, including every error cod
     }
   }));
 
+test('the edit route answers what openapi.json documents, including every error code', () => {
+  const seed = createStore().listListings();
+  const withdrawn = { ...seed.find((l) => l.id === 'l3'), id: 'w1', status: 'withdrawn' };
+  return withServer(
+    async (call) => {
+      const edit = (id, body, userId = 'u2') => call('PATCH', `/api/listings/${id}`, { userId, body });
+      for (const res of [
+        await edit('l2', { priceYen: 3900 }),
+        await edit('l2', '{oops'),
+        await edit('l2', JSON.stringify({ title: 'x'.repeat(70 * 1024) })),
+        await edit('l2', { status: 'sold' }),
+        await edit('l2', { title: ' ' }),
+        await edit('l2', { description: 'x'.repeat(1001) }),
+        await edit('l2', { priceYen: 1 }),
+        await edit('l2', { priceYen: 3900 }, null),
+        await edit('l2', { priceYen: 3900 }, 'u1'),
+        await edit('nope', { priceYen: 3900 }),
+        await edit('l4', { priceYen: 3000 }, 'u3'),
+        await edit('w1', { priceYen: 7000 }),
+      ]) {
+        assertMatchesSpec('PATCH', '/api/listings/{id}', res);
+      }
+      assertMatchesSpec('GET', '/api/listings/{id}', await call('GET', '/api/listings/w1'));
+    },
+    { store: createStore({ listings: [...seed, withdrawn] }) },
+  );
+});
+
+test('the withdraw route and withdrawn listings answer what openapi.json documents', () =>
+  withServer(async (call) => {
+    const withdraw = (id, userId = 'u2') => call('POST', `/api/listings/${id}/withdraw`, { userId });
+    assertMatchesSpec(
+      'PUT',
+      '/api/listings/{id}/favorite',
+      await call('PUT', '/api/listings/l3/favorite', { userId: 'u1' }),
+    );
+    for (const res of [
+      await withdraw('l3'),
+      await withdraw('l3'),
+      await withdraw('l3', null),
+      await withdraw('l2', 'u1'),
+      await withdraw('nope'),
+      await withdraw('l4', 'u3'),
+    ]) {
+      assertMatchesSpec('POST', '/api/listings/{id}/withdraw', res);
+    }
+    assertMatchesSpec('GET', '/api/listings', await call('GET', '/api/listings'));
+    assertMatchesSpec('GET', '/api/listings', await call('GET', '/api/listings?status=withdrawn'));
+    assertMatchesSpec('GET', '/api/listings/{id}', await call('GET', '/api/listings/l3'));
+    assertMatchesSpec('GET', '/api/me/favorites', await call('GET', '/api/me/favorites', { userId: 'u1' }));
+    assertMatchesSpec(
+      'POST',
+      '/api/listings/{id}/purchase',
+      await call('POST', '/api/listings/l3/purchase', { userId: 'u3' }),
+    );
+    for (const userId of ['u1', 'u3']) {
+      assertMatchesSpec(
+        'PUT',
+        '/api/listings/{id}/favorite',
+        await call('PUT', '/api/listings/l3/favorite', { userId }),
+      );
+    }
+    assertMatchesSpec(
+      'DELETE',
+      '/api/listings/{id}/favorite',
+      await call('DELETE', '/api/listings/l3/favorite', { userId: 'u1' }),
+    );
+  }));
+
 test('the favorites limit error matches openapi.json', () => {
   const listings = Array.from({ length: 101 }, (_, i) => ({
     id: `b${i + 1}`,
@@ -173,6 +244,7 @@ test('the favorites limit error matches openapi.json', () => {
     status: 'on_sale',
     buyerId: null,
     createdAt: '2026-04-01T09:00:00.000Z',
+    updatedAt: null,
   }));
   return withServer(
     async (call) => {
