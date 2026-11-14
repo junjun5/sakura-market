@@ -102,6 +102,14 @@ log line goes through `src/redact.js`, which masks credentials (including
   view says so and offers a **Browse all listings** button.
 - If saving fails, for example because you already saved 100 listings, the page
   shows the server's message and the heart and count go back to what they were.
+- Your own listings that are on sale have an **Edit** button. It opens a form on
+  the card with the current title, description and price. **Save** updates the
+  card without reloading the page, and the card keeps its place. **Cancel**
+  closes the form without changes. If the server rejects a change, for example a
+  price below ¥300 or an empty title, the page shows its message and the form
+  stays open with what you typed. An open form and its values stay while you
+  search, filter or press hearts, and other users never see them. Sold listings
+  cannot be edited.
 
 ## API
 

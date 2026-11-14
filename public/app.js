@@ -1,6 +1,8 @@
 // Browser client. Plain DOM, no framework, no build step.
 import { createApiClient, createController, errorMessage } from './controller.js';
+import { controlButton, editForm } from './edit-form.js';
 import { canFavorite } from './favorites-state.js';
+import { actionFor, canManage } from './listing-actions.js';
 
 /**
  * @typedef {import('./favorites-state.js').ClientListing} ClientListing
@@ -72,12 +74,7 @@ function favoriteControls(listing) {
 }
 
 /** @param {ClientListing} listing */
-function listingCard(listing) {
-  const card = document.createElement('article');
-  card.className = 'card';
-  card.dataset.listingId = listing.id;
-  card.dataset.status = listing.status;
-
+function cardDetails(listing) {
   const title = document.createElement('h3');
   title.textContent = listing.title;
 
@@ -93,20 +90,63 @@ function listingCard(listing) {
   seller.className = 'seller';
   seller.textContent = `Seller: ${userName(listing.sellerId)}`;
 
+  return [title, description, price, seller];
+}
+
+/** @param {ClientListing} listing */
+function actionButton(listing) {
+  const { label, enabled } = actionFor(listing, state.userId);
   const action = document.createElement('button');
   action.type = 'button';
-  if (listing.status === 'sold') {
-    action.textContent = 'Sold';
-    action.disabled = true;
-  } else if (listing.sellerId === state.userId) {
-    action.textContent = 'Your listing';
-    action.disabled = true;
-  } else {
-    action.textContent = 'Buy';
-    action.addEventListener('click', () => buy(listing.id));
-  }
+  action.textContent = label;
+  action.disabled = !enabled;
+  if (enabled) action.addEventListener('click', () => buy(listing.id));
+  return action;
+}
 
-  card.append(title, description, price, seller, favoriteControls(listing), action);
+// The closed form's buttons are gone after a render, so focus returns to Edit.
+const editActions = {
+  updateDraft: controller.updateDraft,
+  /** @param {string} id */
+  cancelEdit(id) {
+    controller.cancelEdit(id);
+    if (!controller.draftFor(id)) focusCardControl(id, 'edit');
+  },
+  /** @param {string} id */
+  async saveEdit(id) {
+    await controller.saveEdit(id);
+    if (!controller.draftFor(id) && focusIsLost()) focusCardControl(id, 'edit');
+  },
+};
+
+/** @param {string} id */
+function openEdit(id) {
+  controller.startEdit(id);
+  focusCardControl(id, 'edit-title');
+  // The form makes the card taller; keep all of it in view, Save included.
+  const form = document.querySelector(`#listings [data-listing-id="${CSS.escape(id)}"] form.edit-form`);
+  form?.scrollIntoView({ block: 'nearest' });
+}
+
+// Shown only on the seller's own on-sale cards: the Edit button, or the open form.
+/** @param {ClientListing} listing */
+function ownerControls(listing) {
+  const draft = controller.draftFor(listing.id);
+  if (draft) return editForm(listing, draft, editActions);
+  const wrap = document.createElement('div');
+  wrap.className = 'owner-actions';
+  wrap.append(controlButton('Edit', 'edit', () => openEdit(listing.id)));
+  return wrap;
+}
+
+/** @param {ClientListing} listing */
+function listingCard(listing) {
+  const card = document.createElement('article');
+  card.className = 'card';
+  card.dataset.listingId = listing.id;
+  card.dataset.status = listing.status;
+  card.append(...cardDetails(listing), favoriteControls(listing), actionButton(listing));
+  if (canManage(listing, state.userId)) card.append(ownerControls(listing));
   return card;
 }
 
@@ -151,8 +191,7 @@ function focusTarget({ settledListingId } = {}) {
   const active = /** @type {HTMLElement | null} */ (document.activeElement);
   const focused = focusedCardControl(active);
   if (focused) return focused;
-  const focusLost = !active || active === document.body;
-  return focusLost && settledListingId ? { listingId: settledListingId, control: 'heart' } : null;
+  return focusIsLost() && settledListingId ? { listingId: settledListingId, control: 'heart' } : null;
 }
 
 /** @param {HTMLElement | null} active */
@@ -162,6 +201,19 @@ function focusedCardControl(active) {
   const card = /** @type {HTMLElement | null} */ (active.closest('#listings [data-listing-id]'));
   const listingId = card?.dataset.listingId;
   return listingId ? { listingId, control } : null;
+}
+
+function focusIsLost() {
+  return !document.activeElement || document.activeElement === document.body;
+}
+
+/**
+ * @param {string} listingId
+ * @param {string} control
+ */
+function focusCardControl(listingId, control) {
+  const selector = `[data-listing-id="${CSS.escape(listingId)}"] [data-control="${control}"]`;
+  /** @type {HTMLElement | null} */ ($('#listings').querySelector(selector))?.focus();
 }
 
 /** @param {{ settledListingId?: string }} [options] */
@@ -176,10 +228,7 @@ function render(options) {
   } else {
     container.replaceChildren(...state.listings.map(listingCard));
   }
-  if (target) {
-    const selector = `[data-listing-id="${CSS.escape(target.listingId)}"] [data-control="${target.control}"]`;
-    /** @type {HTMLElement | null} */ (container.querySelector(selector))?.focus();
-  }
+  if (target) focusCardControl(target.listingId, target.control);
 }
 
 /** @param {string} id */

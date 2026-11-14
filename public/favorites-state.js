@@ -9,9 +9,10 @@
  *   description: string,
  *   priceYen: number,
  *   sellerId: string,
- *   status: string,
+ *   status: 'on_sale' | 'sold' | 'withdrawn',
  *   buyerId: string | null,
  *   createdAt: string,
+ *   updatedAt: string | null,
  *   savedCount: number,
  *   savedByMe: boolean,
  * }} ClientListing

@@ -128,7 +128,8 @@ main {
   gap: 6px;
 }
 
-.card[data-status='sold'] {
+.card[data-status='sold'],
+.card[data-status='withdrawn'] {
   opacity: 0.6;
 }
 
@@ -179,6 +180,57 @@ main {
   background: #fff;
   opacity: 0.5;
   cursor: progress;
+}
+
+.owner-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.owner-actions button,
+.edit-buttons .button-secondary {
+  background: #fff;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
+.edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.edit-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.edit-form input,
+.edit-form textarea {
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.edit-form textarea {
+  resize: vertical;
+}
+
+.edit-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.edit-buttons button {
+  margin-top: 0;
 }
 
 .empty {
