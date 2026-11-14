@@ -9,12 +9,26 @@ import {
   optimisticFavorite,
 } from './favorites-state.js';
 
+/**
+ * @typedef {import('./favorites-state.js').ClientListing} ClientListing
+ * @typedef {import('./favorites-state.js').FavoriteState} FavoriteState
+ * @typedef {{ id: string, name: string }} ClientUser
+ * @typedef {{ method?: string, body?: unknown, userId?: string }} ApiOptions
+ * @typedef {(path: string, options?: ApiOptions) => Promise<any>} Api resolves with the parsed JSON body
+ * @typedef {(url: string, init: { method: string, headers: Record<string, string>, body?: string }) => Promise<Response>} FetchLike
+ */
+
+/**
+ * @param {FetchLike} fetchImpl
+ * @param {string} [baseUrl]
+ * @returns {Api}
+ */
 export function createApiClient(fetchImpl, baseUrl = '') {
   return async function api(path, { method = 'GET', body, userId } = {}) {
     const res = await fetchImpl(baseUrl + path, {
       method,
       headers: {
-        'x-user-id': userId,
+        ...(userId ? { 'x-user-id': userId } : {}),
         ...(body ? { 'content-type': 'application/json' } : {}),
       },
       body: body ? JSON.stringify(body) : undefined,
@@ -25,12 +39,35 @@ export function createApiClient(fetchImpl, baseUrl = '') {
   };
 }
 
+/**
+ * @param {string} userId
+ * @param {string} listingId
+ */
 export const pendingKey = (userId, listingId) => `${userId}:${listingId}`;
 
 // `filters()` returns the All view's current { q, onSale }. `render(options)`
 // redraws from `state`; after a favorite settles it receives the listing id so
 // the page can return keyboard focus to that heart.
+/**
+ * @param {{
+ *   api: Api,
+ *   userId: string,
+ *   filters: () => { q?: string, onSale?: boolean },
+ *   render: (options?: { settledListingId?: string }) => void,
+ *   showMessage: (text: string, kind?: string) => void,
+ * }} options
+ */
 export function createController({ api, userId, filters, render, showMessage }) {
+  /**
+   * @type {{
+   *   users: ClientUser[],
+   *   userId: string,
+   *   view: string,
+   *   listings: ClientListing[] | null,
+   *   loadFailed: boolean,
+   *   pending: Map<string, FavoriteState>,
+   * }}
+   */
   const state = {
     users: [],
     userId,
@@ -43,6 +80,7 @@ export function createController({ api, userId, filters, render, showMessage }) 
   };
   const loads = createLatestGate();
 
+  /** @param {string} listingId */
   const pendingFor = (listingId) => state.pending.get(pendingKey(state.userId, listingId));
 
   async function loadView() {
@@ -56,7 +94,7 @@ export function createController({ api, userId, filters, render, showMessage }) 
     } catch (err) {
       if (!loads.isCurrent(ticket)) return;
       state.loadFailed = true;
-      showMessage(err.message, 'error');
+      showMessage(errorMessage(err), 'error');
     }
     render();
   }
@@ -70,23 +108,26 @@ export function createController({ api, userId, filters, render, showMessage }) 
     return loadView();
   }
 
+  /** @param {string} view */
   function setView(view) {
     state.view = view;
     showMessage('');
     return reloadFresh();
   }
 
+  /** @param {string} nextUserId */
   function setUser(nextUserId) {
     state.userId = nextUserId;
     showMessage('');
     return reloadFresh();
   }
 
+  /** @param {string} listingId */
   async function toggleFavorite(listingId) {
-    const userId = state.userId;
-    const key = pendingKey(userId, listingId);
+    const actingUserId = state.userId;
+    const key = pendingKey(actingUserId, listingId);
     const listing = state.listings?.find((l) => l.id === listingId);
-    if (!listing || state.pending.has(key) || !canFavorite(listing, userId)) return;
+    if (!listing || state.pending.has(key) || !canFavorite(listing, actingUserId)) return;
 
     const prior = { id: listingId, savedByMe: listing.savedByMe, savedCount: listing.savedCount };
     const next = optimisticFavorite(listing);
@@ -95,22 +136,13 @@ export function createController({ api, userId, filters, render, showMessage }) 
     showMessage('');
     render();
 
-    let updated = null;
-    let failure = null;
-    try {
-      ({ listing: updated } = await api(`/api/listings/${encodeURIComponent(listingId)}/favorite`, {
-        method: next.savedByMe ? 'PUT' : 'DELETE',
-        userId,
-      }));
-    } catch (err) {
-      failure = err;
-    }
+    const { updated, failure } = await sendFavorite(listingId, next.savedByMe, actingUserId);
     state.pending.delete(key);
-    // The result belongs to `userId` only; it must not touch another user's page.
-    if (state.userId !== userId) return;
+    // The result belongs to `actingUserId` only; it must not touch another user's page.
+    if (state.userId !== actingUserId) return;
 
     state.listings = applyFavoriteResult(state.listings, updated ?? prior, state.view);
-    if (failure) showMessage(failure.message, 'error');
+    if (failure) showMessage(errorMessage(failure), 'error');
     render({ settledListingId: listingId });
     // Any load still in flight may have been answered before this mutation, even
     // one that started before it, so a success always supersedes them with a
@@ -120,4 +152,27 @@ export function createController({ api, userId, filters, render, showMessage }) 
   }
 
   return { state, pendingFor, loadView, reloadFresh, setView, setUser, toggleFavorite };
+
+  /**
+   * @param {string} listingId
+   * @param {boolean} save
+   * @param {string} asUserId
+   * @returns {Promise<{ updated: ClientListing | null, failure: unknown }>}
+   */
+  async function sendFavorite(listingId, save, asUserId) {
+    try {
+      const { listing } = await api(`/api/listings/${encodeURIComponent(listingId)}/favorite`, {
+        method: save ? 'PUT' : 'DELETE',
+        userId: asUserId,
+      });
+      return { updated: listing, failure: null };
+    } catch (err) {
+      return { updated: null, failure: err };
+    }
+  }
+}
+
+/** @param {unknown} err */
+export function errorMessage(err) {
+  return err instanceof Error ? err.message : String(err);
 }

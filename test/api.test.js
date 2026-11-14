@@ -1,38 +1,10 @@
 import assert from 'node:assert/strict';
-import { createServer } from 'node:http';
 import { test } from 'node:test';
 
-import { createApp } from '../src/app.js';
+import { createLogger } from '../src/logger.js';
 import { REDACTED } from '../src/redact.js';
 import { createStore } from '../src/store.js';
-
-// Starts a fresh server on a random port for one test. `appOptions` (store, now)
-// go to createApp, so a test can bring its own fixture store or clock.
-async function withServer(run, appOptions = {}) {
-  const server = createServer(createApp(appOptions));
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const base = `http://127.0.0.1:${server.address().port}`;
-
-  const call = async (method, path, { userId, body } = {}) => {
-    const res = await fetch(base + path, {
-      method,
-      headers: {
-        ...(userId ? { 'x-user-id': userId } : {}),
-        ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
-      },
-      body: body !== undefined ? (typeof body === 'string' ? body : JSON.stringify(body)) : undefined,
-    });
-    const text = await res.text();
-    const isJson = res.headers.get('content-type')?.includes('application/json');
-    return { status: res.status, body: isJson ? JSON.parse(text) : text, headers: res.headers };
-  };
-
-  try {
-    await run(call);
-  } finally {
-    await new Promise((resolve) => server.close(resolve));
-  }
-}
+import { withServer } from './support/server.js';
 
 test('GET /api/health', () =>
   withServer(async (call) => {
@@ -771,29 +743,33 @@ test('favorites: state belongs to one store and starts empty', async () => {
   });
 });
 
-test('unexpected errors answer 500 and are logged without credentials or personal data', async (t) => {
-  const logged = [];
-  t.mock.method(console, 'error', (...args) => logged.push(args));
+test('unexpected errors answer 500 and are logged without credentials or personal data', async () => {
+  const lines = [];
+  const logger = createLogger({ level: 'error', write: (line) => lines.push(JSON.parse(line)) });
   const store = createStore();
   store.listUsers = () => {
     throw new Error('lookup failed for hana@example.com with Bearer not-a-real-token');
   };
 
+  let requestId;
   await withServer(
     async (call) => {
       const res = await call('GET', '/api/users', { userId: 'u1' });
       assert.equal(res.status, 500);
       assert.deepEqual(res.body, { error: { code: 'internal', message: 'Unexpected error.' } });
+      requestId = res.headers.get('x-request-id');
     },
-    { store },
+    { store, logger },
   );
 
-  assert.equal(logged.length, 1);
-  const [label, entry] = logged[0];
-  assert.equal(label, 'unhandled_error');
+  assert.equal(lines.length, 1);
+  const [entry] = lines;
+  assert.equal(entry.level, 'error');
+  assert.equal(entry.msg, 'unhandled_error');
+  assert.equal(entry.requestId, requestId);
   assert.equal(entry.method, 'GET');
   assert.equal(entry.path, '/api/users');
   assert.equal(entry.headers['x-user-id'], REDACTED);
   assert.match(entry.error.message, /^lookup failed for \[redacted\] with Bearer \[redacted\]$/);
-  assert.doesNotMatch(JSON.stringify(logged), /hana@example\.com|not-a-real-token/);
+  assert.doesNotMatch(JSON.stringify(lines), /hana@example\.com|not-a-real-token/);
 });

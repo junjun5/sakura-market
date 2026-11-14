@@ -2,9 +2,21 @@
 // plain values and throw AppError when a rule is broken.
 import { conflict, notFound } from './errors.js';
 
+/**
+ * @typedef {import('./store.js').Store} Store
+ * @typedef {import('./store.js').User} User
+ * @typedef {import('./store.js').Listing} Listing
+ * @typedef {Listing & { savedCount: number, savedByMe: boolean }} DecoratedListing
+ */
+
 export const MAX_FAVORITES = 100;
 
+/**
+ * @param {Store} store
+ * @param {{ now?: () => Date }} [options]
+ */
 export function createFavoriteService(store, { now = () => new Date() } = {}) {
+  /** @param {string} id */
   function getListing(id) {
     const listing = store.getListing(id);
     if (!listing) throw notFound('listing_not_found', `Listing ${id} does not exist.`);
@@ -12,6 +24,11 @@ export function createFavoriteService(store, { now = () => new Date() } = {}) {
   }
 
   // Adds the public saved count and whether `viewer` (a user or null) saved it.
+  /**
+   * @param {Listing} listing
+   * @param {{ id?: string } | null | undefined} viewer
+   * @returns {DecoratedListing}
+   */
   function decorate(listing, viewer) {
     return {
       ...listing,
@@ -20,10 +37,18 @@ export function createFavoriteService(store, { now = () => new Date() } = {}) {
     };
   }
 
+  /**
+   * @param {Listing[]} listings
+   * @param {{ id?: string } | null | undefined} viewer
+   */
   function decorateAll(listings, viewer) {
     return listings.map((listing) => decorate(listing, viewer));
   }
 
+  /**
+   * @param {User} user
+   * @param {string} listingId
+   */
   function save(user, listingId) {
     const listing = getListing(listingId);
     if (listing.sellerId === user.id) {
@@ -41,6 +66,10 @@ export function createFavoriteService(store, { now = () => new Date() } = {}) {
     return decorate(listing, user);
   }
 
+  /**
+   * @param {User} user
+   * @param {string} listingId
+   */
   function remove(user, listingId) {
     const listing = getListing(listingId);
     store.deleteFavorite(user.id, listingId);
@@ -48,12 +77,13 @@ export function createFavoriteService(store, { now = () => new Date() } = {}) {
   }
 
   // The caller's saved listings with live listing data, most recently saved first.
+  /** @param {User} user */
   function listSaved(user) {
     return store
       .listFavoritesByUser(user.id)
       .sort((a, b) => b.savedAt.localeCompare(a.savedAt) || b.sequence - a.sequence)
       .map((favorite) => store.getListing(favorite.listingId))
-      .filter(Boolean)
+      .filter((listing) => listing !== null)
       .map((listing) => decorate(listing, user));
   }
 
