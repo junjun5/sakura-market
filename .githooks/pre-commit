@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Pre-commit gate: runs `npm run check && npm test` against the staged snapshot,
+# not the working tree, so unstaged edits and untracked files can neither hide a
+# broken commit nor block a good one.
+# Install once per clone with `scripts/install-hooks.sh`.
+set -euo pipefail
+
+snapshot="$(mktemp -d "${TMPDIR:-/tmp}/sakura-pre-commit.XXXXXX")"
+trap 'rm -rf "$snapshot"' EXIT
+
+git checkout-index --all --prefix="$snapshot/"
+
+echo "pre-commit: running npm run check && npm test on staged files..."
+if ! (cd "$snapshot" && npm run --silent check && npm test --silent); then
+  echo >&2
+  echo "pre-commit: commit blocked. Fix the failures above, stage the fix, and commit again." >&2
+  exit 1
+fi
+echo "pre-commit: passed."

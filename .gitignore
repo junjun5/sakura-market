@@ -1,4 +1,22 @@
+# Dependencies and local state
 node_modules/
 .dev/
+coverage/
+
+# Logs
 *.log
+
+# Local environment. Real values stay out of Git; the template is committed.
+.env
+.env.*
+!.env.example
+
+# Editors and IDEs
+.idea/
+.vscode/
+*.swp
+*~
+
+# OS files
 .DS_Store
+Thumbs.db

@@ -12,8 +12,11 @@ Guidance for coding agents working in this repository.
 | Start the server in the background | `scripts/dev.sh start` (port 3000, or `PORT=4000 scripts/dev.sh start`) |
 | Read server logs | `scripts/dev.sh logs` |
 | Stop the server | `scripts/dev.sh stop` |
+| Install the pre-commit hook (once per clone) | `scripts/install-hooks.sh` |
 
 Run `npm run check && npm test` before you call a task done.
+
+The pre-commit hook in `.githooks/pre-commit` runs the same gate on the staged files and blocks the commit if it fails. Fix the failure and stage the fix; do not bypass the hook with `--no-verify`.
 
 ## Architecture
 
@@ -38,6 +41,14 @@ Run `npm run check && npm test` before you call a task done.
 - Every new rule needs a unit test. Every new route needs an API test, including its error cases.
 - There are no browser tests. To check the UI, start the server and exercise the page.
 
+## Security
+
+- Secrets: never put credentials, tokens or real personal data in code, tests, fixtures or logs. Local settings go in `.env` (gitignored). List every variable in `.env.example` with a safe default. CI reads secrets only as `${{ secrets.NAME }}`. Test data uses the seed users and obviously fake values such as `not-a-real-token`.
+- Logging: pass anything that can contain request data through `redact()` from `src/redact.js` before you log it. Never log raw headers or bodies. `X-User-Id` counts as a credential.
+- Dependencies: the only third-party code is the GitHub Actions in `.github/workflows/`, pinned to commit SHAs. Dependabot proposes updates only after a release has been public for 7 days (`cooldown` in `.github/dependabot.yml`). Do not bump a pin to a release younger than that by hand.
+- Changes land on `main` through a pull request with the `check-and-test` CI check passing; force-push and branch deletion are blocked. The rule is the ruleset in `.github/rulesets/protect-main.json`; a repository admin applies it with `gh api -X POST repos/junjun5/sakura-market/rulesets --input .github/rulesets/protect-main.json`.
+- Security checks in CI: gitleaks secret scan and an OWASP ZAP baseline scan of the running server (`.github/workflows/security.yml`, rule levels in `.zap/rules.tsv`), plus CodeQL (`.github/workflows/codeql.yml`).
+- Issues and PRs use the templates in `.github/`. Labels are defined in `.github/labels.yml` (`priority: P0`-`P3`, `type: *`, `area: *`) and synced by a workflow. Edit that file instead of creating labels by hand.
 ## Boundaries
 
 - Keep data in memory. Do not add a database.

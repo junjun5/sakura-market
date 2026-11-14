@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { AppError, badRequest, notFound, unauthorized } from './errors.js';
 import { createFavoriteService } from './favorites.js';
 import { createListingService } from './listings.js';
+import { redact } from './redact.js';
 import { createStore } from './store.js';
 
 const PUBLIC_DIR = fileURLToPath(new URL('../public/', import.meta.url));
@@ -120,7 +121,10 @@ export function createApp({ store = createStore(), now } = {}) {
       if (err instanceof AppError) {
         return sendJson(res, err.status, { error: { code: err.code, message: err.message } });
       }
-      console.error(err);
+      console.error(
+        'unhandled_error',
+        redact({ method: req.method, path: url.pathname, headers: req.headers, error: err }),
+      );
       return sendJson(res, 500, { error: { code: 'internal', message: 'Unexpected error.' } });
     }
   };

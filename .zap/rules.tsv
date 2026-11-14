@@ -1,0 +1,10 @@
+# ZAP baseline rule levels, one per line: <rule id><TAB><IGNORE|WARN|FAIL><TAB><name>.
+# Rules not listed keep ZAP's default level. FAIL marks findings that must be fixed
+# before merging; the header rules stay WARN until the server sends those headers.
+10020	WARN	Anti-clickjacking header missing (X-Frame-Options or CSP frame-ancestors)
+10021	WARN	X-Content-Type-Options header missing
+10038	WARN	Content Security Policy header not set
+40012	FAIL	Cross Site Scripting (Reflected)
+40014	FAIL	Cross Site Scripting (Persistent)
+40018	FAIL	SQL Injection
+90020	FAIL	Remote OS Command Injection

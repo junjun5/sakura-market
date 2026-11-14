@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { test } from 'node:test';
 
 import { createApp } from '../src/app.js';
+import { REDACTED } from '../src/redact.js';
 import { createStore } from '../src/store.js';
 
 // Starts a fresh server on a random port for one test. `appOptions` (store, now)
@@ -660,4 +661,31 @@ test('favorites: state belongs to one store and starts empty', async () => {
     assert.equal(await countOf(call, HELMET), 0);
     assert.deepEqual(await savedIds(call, 'u1'), []);
   });
+});
+
+test('unexpected errors answer 500 and are logged without credentials or personal data', async (t) => {
+  const logged = [];
+  t.mock.method(console, 'error', (...args) => logged.push(args));
+  const store = createStore();
+  store.listUsers = () => {
+    throw new Error('lookup failed for hana@example.com with Bearer not-a-real-token');
+  };
+
+  await withServer(
+    async (call) => {
+      const res = await call('GET', '/api/users', { userId: 'u1' });
+      assert.equal(res.status, 500);
+      assert.deepEqual(res.body, { error: { code: 'internal', message: 'Unexpected error.' } });
+    },
+    { store },
+  );
+
+  assert.equal(logged.length, 1);
+  const [label, entry] = logged[0];
+  assert.equal(label, 'unhandled_error');
+  assert.equal(entry.method, 'GET');
+  assert.equal(entry.path, '/api/users');
+  assert.equal(entry.headers['x-user-id'], REDACTED);
+  assert.match(entry.error.message, /^lookup failed for \[redacted\] with Bearer \[redacted\]$/);
+  assert.doesNotMatch(JSON.stringify(logged), /hana@example\.com|not-a-real-token/);
 });

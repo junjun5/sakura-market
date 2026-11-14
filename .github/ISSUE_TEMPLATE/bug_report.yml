@@ -1,0 +1,58 @@
+name: Bug report
+description: Something in the API or the web page does not work as documented.
+title: "Bug: "
+labels: ["type: bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please do not paste real credentials or personal data;
+        the seed users (u1 Hana, u2 Ken, u3 Mio) are enough to reproduce most problems.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - API (src/)
+        - Web page (public/)
+        - Tooling (scripts, hooks, CI)
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Exact requests or clicks, starting from a freshly started server.
+      placeholder: |
+        1. scripts/dev.sh start
+        2. curl -X PUT -H 'X-User-Id: u1' http://localhost:3000/api/listings/l2/favorite
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      description: What should happen. Quote the README rule if one applies.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: What happened instead, including status codes and response bodies.
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Server log
+      description: Output of `scripts/dev.sh logs`, if relevant.
+      render: text
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Node.js version (`node --version`), OS, and browser for page bugs.
+      placeholder: Node v20.18.0, macOS 15, Firefox 133

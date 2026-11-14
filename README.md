@@ -20,6 +20,12 @@ scripts/dev.sh stop
 
 Open the server address in a browser to use the web page.
 
+### Configuration
+
+Copy `.env.example` to `.env` to change local settings. `.env` is gitignored,
+and variables set in the shell override it. The only setting today is `PORT`
+(default `3000`). Loading `.env` needs Node.js 20.12 or newer.
+
 ## Test
 
 ```bash
@@ -28,10 +34,31 @@ npm test                           # unit + API tests (node:test)
 node --test test/favorites.test.js # one test file
 ```
 
-Run `npm run check && npm test` before calling a change done. Unit tests use a
+Run `npm run check && npm test` before calling a change done. To have Git run
+that for you, install the pre-commit hook once per clone:
+
+```bash
+scripts/install-hooks.sh   # sets core.hooksPath to .githooks
+```
+
+The hook checks the staged version of the files, so unstaged edits and
+untracked files do not affect the result. Unit tests use a
 fresh in-memory store; API tests start a real server on a random port. There are
 no browser tests: to check the page, start the server and use it.
 
+## CI and security
+
+Workflows in `.github/workflows/` run on every pull request and on pushes to `main`:
+
+- `ci.yml`: `npm run check` and `npm test` on Node.js 20. The ruleset in `.github/rulesets/protect-main.json` requires its `check-and-test` job, and a pull request, for every change to `main`.
+- `security.yml`: a gitleaks secret scan of the full history, and an OWASP ZAP baseline scan of the running server. The ZAP report is uploaded as the `zap-baseline` artifact, and its rule levels are in `.zap/rules.tsv`.
+- `codeql.yml`: CodeQL static analysis. Results appear under Security > Code scanning.
+- `sync-labels.yml`: applies `.github/labels.yml` to the repository's labels.
+
+Dependabot (`.github/dependabot.yml`) proposes weekly updates for the pinned
+Actions, but only for releases that are at least 7 days old. Server error logs go
+through `src/redact.js`, which masks credentials (including `X-User-Id`) and
+email addresses.
 ## Using the web page
 
 - **Signed in as** switches between the seed users Hana, Ken and Mio. Hearts,
@@ -104,11 +131,16 @@ src/listings.js            business rules for listings
 src/favorites.js           business rules for saved listings (favorites)
 src/store.js               in-memory data and seed
 src/errors.js              AppError and helpers
+src/redact.js              masks credentials and personal data before logging
 public/                    browser client (plain HTML/CSS/JS)
 public/controller.js       client page state and ordering of loads and favorite toggles
 public/favorites-state.js  pure helpers for the client's Favorites state
 test/                      node:test suites
+scripts/                   dev server control, syntax check, hook install
+.githooks/pre-commit       runs check and tests on staged files before each commit
 docs/prd/                  product requirement documents
+.github/                   CI and security workflows, Dependabot, CODEOWNERS, templates, labels
+.zap/rules.tsv             ZAP baseline scan rule levels
 ```
 
 Data, including saved listings, is kept in memory and resets when the server
