@@ -42,6 +42,7 @@ export function createListingService(store, { now = () => new Date() } = {}) {
     const needle = (q ?? '').trim().toLowerCase();
     return store
       .listListings()
+      .filter((l) => l.status !== 'withdrawn')
       .filter((l) => (status ? l.status === status : true))
       .filter((l) => (needle ? l.title.toLowerCase().includes(needle) : true))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -100,12 +101,26 @@ export function createListingService(store, { now = () => new Date() } = {}) {
     if (listing.sellerId === user.id) {
       throw conflict('own_listing', 'You cannot buy your own listing.');
     }
-    if (listing.status !== 'on_sale') throw alreadySold();
+    assertOnSale(listing);
     // get() above has already proved the listing exists.
     return /** @type {Listing} */ (store.updateListing(id, { status: 'sold', buyerId: user.id }));
   }
 
-  return { list, get, create, edit, purchase };
+  /**
+   * Takes the listing off sale. Withdrawing an already withdrawn listing changes nothing.
+   * @param {User} user
+   * @param {string} id
+   */
+  function withdraw(user, id) {
+    const listing = get(id);
+    assertSeller(listing, user);
+    if (listing.status === 'sold') throw alreadySold();
+    if (listing.status === 'withdrawn') return listing;
+    // get() above has already proved the listing exists.
+    return /** @type {Listing} */ (store.updateListing(id, { status: 'withdrawn' }));
+  }
+
+  return { list, get, create, edit, purchase, withdraw };
 }
 
 /**
@@ -121,9 +136,11 @@ function assertSeller(listing, user) {
 /** @param {Listing} listing */
 function assertOnSale(listing) {
   if (listing.status === 'sold') throw alreadySold();
-  if (listing.status === 'withdrawn') {
-    throw conflict('listing_withdrawn', 'This listing has been withdrawn.');
-  }
+  if (listing.status === 'withdrawn') throw listingWithdrawn();
+}
+
+export function listingWithdrawn() {
+  return conflict('listing_withdrawn', 'This listing has been withdrawn.');
 }
 
 function alreadySold() {

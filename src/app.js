@@ -139,6 +139,17 @@ export function createApp({
       },
     ],
     [
+      'POST',
+      '/api/listings/:id/withdraw',
+      ({ req, params }) => {
+        const user = requireUser(req);
+        return {
+          status: 200,
+          body: { listing: favorites.decorate(listings.withdraw(user, params.id), user) },
+        };
+      },
+    ],
+    [
       'PUT',
       '/api/listings/:id/favorite',
       ({ req, params }) => ({

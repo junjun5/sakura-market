@@ -20,6 +20,7 @@ The machine-readable schema is [openapi.json](openapi.json); test/openapi.test.j
 | GET | `/api/listings/{id}` | no | One listing |
 | PATCH | `/api/listings/{id}` | yes | Change the title, description or price of the caller's listing |
 | POST | `/api/listings/{id}/purchase` | yes | Buy a listing |
+| POST | `/api/listings/{id}/withdraw` | yes | Withdraw the caller's listing from sale |
 | PUT | `/api/listings/{id}/favorite` | yes | Save a listing for the caller |
 | DELETE | `/api/listings/{id}/favorite` | yes | Remove a listing from the caller's saved items |
 
@@ -76,7 +77,7 @@ Auth: `X-User-Id` required.
 
 The caller's saved listings, most recently saved first.
 
-Always the caller's whole list: query parameters are ignored. Listings sold after they were saved stay in the list with `status: "sold"`.
+Always the caller's whole list: query parameters are ignored. Listings sold or withdrawn after they were saved stay in the list at the same position with `status: "sold"` or `status: "withdrawn"`, and count toward the limit of 100.
 
 Auth: `X-User-Id` required.
 
@@ -90,17 +91,19 @@ Auth: `X-User-Id` required.
 
 List listings, newest first.
 
+Withdrawn listings are never included, for any caller or filter.
+
 Auth: none.
 
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
-| `status` | query | "on_sale" \| "sold" | no | Only listings with this status. |
+| `status` | query | "on_sale" \| "sold" | no | Only listings with this status. `withdrawn` is not accepted. |
 | `q` | query | string | no | Case-insensitive search in titles. |
 
 | Status | Meaning | Error codes |
 | --- | --- | --- |
 | 200 | Matching listings. |  |
-| 400 | `status` is not a known status. | `invalid_status` |
+| 400 | `status` is not `on_sale` or `sold`. | `invalid_status` |
 | 500 | Unexpected server error. The details are in the server log under the same request ID. | `internal` |
 
 ### POST `/api/listings`
@@ -127,6 +130,8 @@ Request body (JSON):
 ### GET `/api/listings/{id}`
 
 One listing.
+
+Also returns withdrawn listings, with `status: "withdrawn"`.
 
 Auth: none.
 
@@ -174,6 +179,8 @@ Request body (JSON):
 
 Buy a listing.
 
+The seller cannot buy their own listing (`own_listing` is checked first). Sold and withdrawn listings cannot be bought.
+
 Auth: `X-User-Id` required.
 
 | Parameter | In | Type | Required | Description |
@@ -185,14 +192,35 @@ Auth: `X-User-Id` required.
 | 200 | The listing, now sold to the caller. |  |
 | 401 | No `X-User-Id` header, or it names no known user. | `unauthorized` |
 | 404 | The listing does not exist. | `listing_not_found` |
-| 409 | The caller is the seller, or the listing is already sold. | `own_listing`, `already_sold` |
+| 409 | The caller is the seller, or the listing is already sold or withdrawn. | `own_listing`, `already_sold`, `listing_withdrawn` |
+| 500 | Unexpected server error. The details are in the server log under the same request ID. | `internal` |
+
+### POST `/api/listings/{id}/withdraw`
+
+Withdraw the caller's listing from sale.
+
+Only the seller can withdraw a listing, and only while it is on sale. Its `status` becomes `withdrawn`; `updatedAt` does not change. Withdrawing a listing that is already withdrawn succeeds and changes nothing. A withdrawn listing no longer appears in `GET /api/listings`, cannot be bought or newly saved, and can still be opened by its ID. It keeps its saves and stays in the Saved lists of the users who saved it.
+
+Auth: `X-User-Id` required.
+
+| Parameter | In | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `id` | path | string | yes | Listing ID, for example `l2`. |
+
+| Status | Meaning | Error codes |
+| --- | --- | --- |
+| 200 | The listing, now withdrawn (or already withdrawn). |  |
+| 401 | No `X-User-Id` header, or it names no known user. | `unauthorized` |
+| 403 | The caller is not the seller. | `not_seller` |
+| 404 | The listing does not exist. | `listing_not_found` |
+| 409 | The listing is already sold. | `already_sold` |
 | 500 | Unexpected server error. The details are in the server log under the same request ID. | `internal` |
 
 ### PUT `/api/listings/{id}/favorite`
 
 Save a listing for the caller.
 
-Saving a listing that is already saved succeeds and changes nothing. Sold listings can be saved. A user can keep at most 100 saved listings.
+Saving a listing that is already saved succeeds and changes nothing, even if it was withdrawn since. Sold listings can be saved; withdrawn listings cannot be newly saved. A user can keep at most 100 saved listings.
 
 Auth: `X-User-Id` required.
 
@@ -205,7 +233,7 @@ Auth: `X-User-Id` required.
 | 200 | The listing with its updated `savedCount` and `savedByMe: true`. |  |
 | 401 | No `X-User-Id` header, or it names no known user. | `unauthorized` |
 | 404 | The listing does not exist. | `listing_not_found` |
-| 409 | The caller is the seller, or already has 100 saved listings. | `own_listing`, `favorites_limit_reached` |
+| 409 | The caller is the seller, the listing is withdrawn, or the caller already has 100 saved listings. | `own_listing`, `listing_withdrawn`, `favorites_limit_reached` |
 | 500 | Unexpected server error. The details are in the server log under the same request ID. | `internal` |
 
 ### DELETE `/api/listings/{id}/favorite`

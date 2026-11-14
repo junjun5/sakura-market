@@ -193,6 +193,47 @@ test('the edit route answers what openapi.json documents, including every error 
   );
 });
 
+test('the withdraw route and withdrawn listings answer what openapi.json documents', () =>
+  withServer(async (call) => {
+    const withdraw = (id, userId = 'u2') => call('POST', `/api/listings/${id}/withdraw`, { userId });
+    assertMatchesSpec(
+      'PUT',
+      '/api/listings/{id}/favorite',
+      await call('PUT', '/api/listings/l3/favorite', { userId: 'u1' }),
+    );
+    for (const res of [
+      await withdraw('l3'),
+      await withdraw('l3'),
+      await withdraw('l3', null),
+      await withdraw('l2', 'u1'),
+      await withdraw('nope'),
+      await withdraw('l4', 'u3'),
+    ]) {
+      assertMatchesSpec('POST', '/api/listings/{id}/withdraw', res);
+    }
+    assertMatchesSpec('GET', '/api/listings', await call('GET', '/api/listings'));
+    assertMatchesSpec('GET', '/api/listings', await call('GET', '/api/listings?status=withdrawn'));
+    assertMatchesSpec('GET', '/api/listings/{id}', await call('GET', '/api/listings/l3'));
+    assertMatchesSpec('GET', '/api/me/favorites', await call('GET', '/api/me/favorites', { userId: 'u1' }));
+    assertMatchesSpec(
+      'POST',
+      '/api/listings/{id}/purchase',
+      await call('POST', '/api/listings/l3/purchase', { userId: 'u3' }),
+    );
+    for (const userId of ['u1', 'u3']) {
+      assertMatchesSpec(
+        'PUT',
+        '/api/listings/{id}/favorite',
+        await call('PUT', '/api/listings/l3/favorite', { userId }),
+      );
+    }
+    assertMatchesSpec(
+      'DELETE',
+      '/api/listings/{id}/favorite',
+      await call('DELETE', '/api/listings/l3/favorite', { userId: 'u1' }),
+    );
+  }));
+
 test('the favorites limit error matches openapi.json', () => {
   const listings = Array.from({ length: 101 }, (_, i) => ({
     id: `b${i + 1}`,

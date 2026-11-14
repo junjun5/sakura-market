@@ -257,7 +257,7 @@
         "operationId": "listMyFavorites",
         "tags": ["favorites"],
         "summary": "The caller's saved listings, most recently saved first",
-        "description": "Always the caller's whole list: query parameters are ignored. Listings sold after they were saved stay in the list with `status: \"sold\"`.",
+        "description": "Always the caller's whole list: query parameters are ignored. Listings sold or withdrawn after they were saved stay in the list at the same position with `status: \"sold\"` or `status: \"withdrawn\"`, and count toward the limit of 100.",
         "security": [
           {
             "UserId": []
@@ -339,7 +339,7 @@
             "name": "status",
             "in": "query",
             "required": false,
-            "description": "Only listings with this status.",
+            "description": "Only listings with this status. `withdrawn` is not accepted.",
             "schema": {
               "type": "string",
               "enum": ["on_sale", "sold"]
@@ -385,7 +385,7 @@
             }
           },
           "400": {
-            "description": "`status` is not a known status.",
+            "description": "`status` is not `on_sale` or `sold`.",
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/RequestId"
@@ -416,7 +416,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Withdrawn listings are never included, for any caller or filter."
       },
       "post": {
         "operationId": "createListing",
@@ -611,7 +612,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Also returns withdrawn listings, with `status: \"withdrawn\"`."
       },
       "patch": {
         "operationId": "updateListing",
@@ -864,13 +866,139 @@
             }
           },
           "409": {
-            "description": "The caller is the seller, or the listing is already sold.",
+            "description": "The caller is the seller, or the listing is already sold or withdrawn.",
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/RequestId"
               }
             },
-            "x-error-codes": ["own_listing", "already_sold"],
+            "x-error-codes": ["own_listing", "already_sold", "listing_withdrawn"],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error. The details are in the server log under the same request ID.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "x-error-codes": ["internal"],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "The seller cannot buy their own listing (`own_listing` is checked first). Sold and withdrawn listings cannot be bought."
+      }
+    },
+    "/api/listings/{id}/withdraw": {
+      "post": {
+        "operationId": "withdrawListing",
+        "tags": ["listings"],
+        "summary": "Withdraw the caller's listing from sale",
+        "description": "Only the seller can withdraw a listing, and only while it is on sale. Its `status` becomes `withdrawn`; `updatedAt` does not change. Withdrawing a listing that is already withdrawn succeeds and changes nothing. A withdrawn listing no longer appears in `GET /api/listings`, cannot be bought or newly saved, and can still be opened by its ID. It keeps its saves and stays in the Saved lists of the users who saved it.",
+        "security": [
+          {
+            "UserId": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ListingId"
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The listing, now withdrawn (or already withdrawn).",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["listing"],
+                  "properties": {
+                    "listing": {
+                      "$ref": "#/components/schemas/Listing"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No `X-User-Id` header, or it names no known user.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "x-error-codes": ["unauthorized"],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not the seller.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "x-error-codes": ["not_seller"],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The listing does not exist.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "x-error-codes": ["listing_not_found"],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The listing is already sold.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "x-error-codes": ["already_sold"],
             "content": {
               "application/json": {
                 "schema": {
@@ -903,7 +1031,7 @@
         "operationId": "saveListing",
         "tags": ["favorites"],
         "summary": "Save a listing for the caller",
-        "description": "Saving a listing that is already saved succeeds and changes nothing. Sold listings can be saved. A user can keep at most 100 saved listings.",
+        "description": "Saving a listing that is already saved succeeds and changes nothing, even if it was withdrawn since. Sold listings can be saved; withdrawn listings cannot be newly saved. A user can keep at most 100 saved listings.",
         "security": [
           {
             "UserId": []
@@ -973,13 +1101,13 @@
             }
           },
           "409": {
-            "description": "The caller is the seller, or already has 100 saved listings.",
+            "description": "The caller is the seller, the listing is withdrawn, or the caller already has 100 saved listings.",
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/RequestId"
               }
             },
-            "x-error-codes": ["own_listing", "favorites_limit_reached"],
+            "x-error-codes": ["own_listing", "listing_withdrawn", "favorites_limit_reached"],
             "content": {
               "application/json": {
                 "schema": {

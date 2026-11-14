@@ -111,20 +111,21 @@ response has an `X-Request-ID` header. Errors look like `{ "error": { "code": ".
 "Auth" is a mock: send `X-User-Id: u1` (Hana), `u2` (Ken) or `u3` (Mio).
 Routes marked "yes" answer `401 unauthorized` without a known user.
 
-| Method | Path                                  | Auth | What it does                                                                          |
-| ------ | ------------------------------------- | ---- | ------------------------------------------------------------------------------------- |
-| GET    | `/api/health`                         | no   | Liveness check                                                                        |
-| GET    | `/api/metrics`                        | no   | Prometheus metrics (flag `metrics_endpoint`, on by default)                           |
-| GET    | `/api/users`                          | no   | Seed users                                                                            |
-| GET    | `/api/me`                             | yes  | The calling user                                                                      |
-| GET    | `/api/listings?status=on_sale&q=text` | no   | List, filter by status, search by title                                               |
-| GET    | `/api/listings/:id`                   | no   | One listing                                                                           |
-| POST   | `/api/listings`                       | yes  | Create a listing (`title`, `description`, `priceYen`)                                 |
-| PATCH  | `/api/listings/:id`                   | yes  | Change the title, description or price of your on-sale listing; returns `{ listing }` |
-| POST   | `/api/listings/:id/purchase`          | yes  | Buy a listing                                                                         |
-| PUT    | `/api/listings/:id/favorite`          | yes  | Save a listing for the caller; returns `{ listing }`                                  |
-| DELETE | `/api/listings/:id/favorite`          | yes  | Remove a listing from the caller's saved items; returns `{ listing }`                 |
-| GET    | `/api/me/favorites`                   | yes  | The caller's saved listings, most recently saved first; returns `{ listings }`        |
+| Method | Path                                  | Auth | What it does                                                                            |
+| ------ | ------------------------------------- | ---- | --------------------------------------------------------------------------------------- |
+| GET    | `/api/health`                         | no   | Liveness check                                                                          |
+| GET    | `/api/metrics`                        | no   | Prometheus metrics (flag `metrics_endpoint`, on by default)                             |
+| GET    | `/api/users`                          | no   | Seed users                                                                              |
+| GET    | `/api/me`                             | yes  | The calling user                                                                        |
+| GET    | `/api/listings?status=on_sale&q=text` | no   | List, filter by status (`on_sale` or `sold`), search by title; never withdrawn listings |
+| GET    | `/api/listings/:id`                   | no   | One listing, including a withdrawn one                                                  |
+| POST   | `/api/listings`                       | yes  | Create a listing (`title`, `description`, `priceYen`)                                   |
+| PATCH  | `/api/listings/:id`                   | yes  | Change the title, description or price of your on-sale listing; returns `{ listing }`   |
+| POST   | `/api/listings/:id/withdraw`          | yes  | Withdraw your on-sale listing from sale; returns `{ listing }`                          |
+| POST   | `/api/listings/:id/purchase`          | yes  | Buy a listing                                                                           |
+| PUT    | `/api/listings/:id/favorite`          | yes  | Save a listing for the caller; returns `{ listing }`                                    |
+| DELETE | `/api/listings/:id/favorite`          | yes  | Remove a listing from the caller's saved items; returns `{ listing }`                   |
+| GET    | `/api/me/favorites`                   | yes  | The caller's saved listings, most recently saved first; returns `{ listings }`          |
 
 ### Editing listings
 
@@ -152,6 +153,31 @@ curl -X PATCH -H 'X-User-Id: u2' -H 'Content-Type: application/json' \
   -d '{"priceYen":3900}' http://localhost:3000/api/listings/l2
 ```
 
+### Withdrawing listings
+
+`POST /api/listings/:id/withdraw` takes a listing you sell off sale. Its
+`status` becomes `withdrawn`.
+
+Rules:
+
+- Only the seller can withdraw, and only while the listing is on sale: anyone
+  else gets `403 not_seller`, and a sold listing fails with `409 already_sold`.
+  The seller check comes first, so another user gets `403` even for a listing
+  that is already withdrawn.
+- Withdrawing again succeeds and changes nothing.
+- Withdrawing is not an edit: `updatedAt` stays as it was, and the listing keeps
+  its saves and saved count.
+- Withdrawn listings are hidden from `GET /api/listings` and its search, for
+  everyone including the seller, but can still be opened by ID with
+  `GET /api/listings/:id`. `?status=withdrawn` fails with `400 invalid_status`.
+- Withdrawn listings cannot be bought or newly saved: `409 listing_withdrawn`
+  (the seller still gets `409 own_listing`). They cannot be edited either.
+- There is no way to put a withdrawn listing back on sale.
+
+```bash
+curl -X POST -H 'X-User-Id: u2' http://localhost:3000/api/listings/l3/withdraw
+```
+
 ### Favorites
 
 Every listing in a response carries two extra fields:
@@ -167,10 +193,14 @@ Rules:
 - Removing a listing and saving it again moves it to the front of your saved list.
 - You cannot save your own listing: `409 own_listing`.
 - You can keep at most 100 saved listings. Saving another one fails with
-  `409 favorites_limit_reached` until you remove one. Sold listings count too.
+  `409 favorites_limit_reached` until you remove one. Sold and withdrawn listings count too.
 - Saving or removing a listing that does not exist fails with `404 listing_not_found`.
 - Sold listings can be saved and removed. A saved listing that is later sold
   stays in your saved list with `status: "sold"`.
+- Withdrawn listings cannot be newly saved: `409 listing_withdrawn`. A saved
+  listing that is later withdrawn stays in your saved list, at the same position,
+  with `status: "withdrawn"`. You can remove it, and saving it again while it is
+  still saved succeeds and changes nothing.
 - `/api/me/favorites` always returns the caller's own list. It takes no filters.
 
 ```bash

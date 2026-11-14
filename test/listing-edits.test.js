@@ -12,6 +12,7 @@ import {
   STATUSES,
 } from '../src/listings.js';
 import { createStore } from '../src/store.js';
+import { assertAppError, assertRejectedUnchanged } from './support/errors.js';
 
 const hana = { id: 'u1', name: 'Hana' };
 const ken = { id: 'u2', name: 'Ken' };
@@ -35,24 +36,6 @@ function setup({ store = createStore() } = {}) {
     return at;
   };
   return { store, service: createListingService(store, { now }) };
-}
-
-function assertAppError(fn, status, code, message) {
-  assert.throws(fn, (err) => {
-    assert.ok(err instanceof AppError, `expected AppError, got ${err}`);
-    assert.equal(err.status, status);
-    assert.equal(err.code, code);
-    if (message !== undefined) assert.equal(err.message, message);
-    return true;
-  });
-}
-
-// Runs `fn`, which must throw, and checks that the listing did not change.
-// `expected` is [status, code] or [status, code, message].
-function assertRejectedUnchanged(store, id, fn, expected) {
-  const before = structuredClone(store.getListing(id));
-  assertAppError(fn, ...expected);
-  assert.deepEqual(store.getListing(id), before);
 }
 
 test('forbidden() makes a 403 AppError', () => {
